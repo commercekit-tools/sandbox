@@ -19,7 +19,7 @@
 The rate-limit namespace ID must remain unique within the Cloudflare account. If
 `1001` is already assigned to an unrelated rule, choose an unused positive
 integer in `wrangler.jsonc` before merge. For stronger perimeter control, add a
-Cloudflare WAF rate-limit rule for `POST /__mock/runs` using the same 30/minute
+Cloudflare WAF rate-limit rule for `POST /sandbox/v1/runs` using the same 30/minute
 policy. The binding remains the application-level enforcement point.
 
 ## Secrets required before merge
@@ -68,7 +68,7 @@ multi-key rotation strategy is added later.
 
 ## Post-deployment checks
 
-1. Request `/__mock/health`, `/openapi.json`, and `/.well-known/jwks.json`.
+1. Request `/sandbox/v1/health`, `/openapi.json`, and `/.well-known/jwks.json`.
 2. Create a disposable run and obtain a token.
 3. Execute one successful build and deployment flow.
 4. Delete the run and confirm its token is rejected.

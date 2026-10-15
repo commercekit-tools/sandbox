@@ -76,7 +76,7 @@ state-aware handler and test coverage rather than a catch-all response.
 - The sandbox adds deterministic 429 and 500 fault responses to exercise client
   resilience. These are marked as simulation behavior where an operation's SAP
   page does not explicitly enumerate them.
-- CommerceKit run and scenario operations live only under `/__mock/*` and are
+- CommerceKit run and scenario operations live only under `/sandbox/v1/*` and are
   documented separately from the compatibility surface.
 - Backup, restore, schedule, certificate, and scaling operations model API
   state and relationships without invoking physical infrastructure. This is

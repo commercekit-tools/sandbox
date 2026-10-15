@@ -44,7 +44,7 @@ export function jsonResponse(value: unknown, status = 200, headers?: HeadersInit
   return new Response(JSON.stringify(value), { status, headers: responseHeaders });
 }
 
-export function mockError(status: number, code: string, message: string): Response {
+export function controlError(status: number, code: string, message: string): Response {
   return jsonResponse({ error: { code, message } }, status);
 }
 

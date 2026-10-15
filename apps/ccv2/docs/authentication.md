@@ -5,7 +5,7 @@ client secret, resource, and token URL. These values are synthetic and must not
 be replaced with real SAP production credentials.
 
 The control token is accepted only as `Authorization: Bearer <token>` on the
-matching run's `/__mock/runs/{runId}/*` operations. Its HMAC verifier is stored in
+matching run's `/sandbox/v1/runs/{runId}/*` operations. Its HMAC verifier is stored in
 SQLite. A run ID alone grants no access, and an OAuth access token does not grant
 scenario-control access.
 
@@ -30,7 +30,7 @@ x-approuter-authorization: Bearer <access-token>
 The Worker verifies the signature, `kid`, algorithm, issuer, expiry, audience,
 subject/run consistency, and current run existence. `alg=none`, wrong-audience,
 expired, deleted-run, and wrongly signed tokens fail closed. The optional
-`x-mock-run-id` header is only a consistency check and cannot select a different
+`x-sandbox-run-id` header is only a consistency check and cannot select a different
 run.
 
 The public verification key is available from `/.well-known/jwks.json`. The

@@ -13,7 +13,7 @@ export interface CreatedRun {
 }
 
 export async function createRun(): Promise<CreatedRun> {
-  const response = await worker.default.fetch("https://example.com/__mock/runs", {
+  const response = await worker.default.fetch("https://example.com/sandbox/v1/runs", {
     method: "POST",
     headers: { "CF-Connecting-IP": `192.0.2.${String(Math.floor(Math.random() * 250) + 1)}` },
   });
@@ -49,7 +49,7 @@ export function sapHeaders(token: string): Record<string, string> {
 
 export async function configureScenario(run: CreatedRun, scenario: unknown): Promise<void> {
   const response = await worker.default.fetch(
-    `https://example.com/__mock/runs/${run.runId}/scenario`,
+    `https://example.com/sandbox/v1/runs/${run.runId}/scenario`,
     {
       method: "PUT",
       headers: { ...controlHeaders(run), "Content-Type": "application/json" },

@@ -188,7 +188,7 @@ describe("SAP-compatible build API", () => {
     await expect(secondProgress.json()).resolves.toMatchObject({ buildStatus: "BUILDING" });
 
     const state = await worker.default.fetch(
-      `https://example.com/__mock/runs/${first.runId}/state`,
+      `https://example.com/sandbox/v1/runs/${first.runId}/state`,
       {
         headers: controlHeaders(first),
       },

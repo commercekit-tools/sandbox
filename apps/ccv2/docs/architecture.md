@@ -8,11 +8,11 @@ the synthetic OAuth client.
 
 ```mermaid
 flowchart LR
-  Client -->|control bearer| Mock[/__mock routes]
+  Client -->|control bearer| Control[/sandbox/v1 routes]
   Client -->|client credentials| OAuth[/oauth2/token]
   OAuth -->|RS256 JWT| Client
   Client -->|x-approuter-authorization| SAP[/v2 routes]
-  Mock --> DO[(Ccv2Run SQLite)]
+  Control --> DO[(Ccv2Run SQLite)]
   OAuth --> DO
   SAP --> DO
   JWT[Stable RSA secret and public JWK] --> OAuth
@@ -46,5 +46,5 @@ Cloudflare Rate Limiting binding configured for 30 requests per source key per
 minute.
 
 The Management API routes preserve `/v2/subscriptions/{subscriptionCode}/...`.
-CommerceKit controls stay under `/__mock/*`. The two surfaces have separate
+CommerceKit controls stay under `/sandbox/v1/*`. The two surfaces have separate
 authorization models and separately served OpenAPI documents.

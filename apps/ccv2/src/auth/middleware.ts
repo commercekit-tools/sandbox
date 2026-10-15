@@ -19,7 +19,7 @@ export const sapAuthentication: MiddlewareHandler<AppEnvironment> = async (conte
   try {
     const payload = await verifyAccessToken(context.env, token);
     const runId = payload.run_id;
-    const requestedRunId = context.req.header("x-mock-run-id");
+    const requestedRunId = context.req.header("x-sandbox-run-id");
     if (requestedRunId && requestedRunId !== runId) {
       return vendorProblem(
         403,

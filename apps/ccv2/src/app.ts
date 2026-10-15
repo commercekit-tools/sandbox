@@ -7,7 +7,7 @@ import { buildRoutes } from "./routes/builds";
 import { deploymentRoutes } from "./routes/deployments";
 import { extendedRoutes } from "./routes/extended";
 import { healthRoutes } from "./routes/health";
-import { mockControlRoutes } from "./routes/mock-control";
+import { sandboxControlRoutes } from "./routes/sandbox-control";
 import { oauthRoutes } from "./routes/oauth";
 import { openapiRoutes } from "./routes/openapi";
 import type { AppEnvironment } from "./types";
@@ -43,7 +43,7 @@ export function createApp(): Hono<AppEnvironment> {
 
   app.route("/", healthRoutes);
   app.route("/", oauthRoutes);
-  app.route("/", mockControlRoutes);
+  app.route("/", sandboxControlRoutes);
   app.route("/", openapiRoutes);
   app.use("/v2/*", sapAuthentication);
   app.route("/", buildRoutes);

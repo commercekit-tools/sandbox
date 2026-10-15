@@ -6,7 +6,22 @@ info:
 servers:
   - url: https://ccv2.sandbox.commercekit.tools
 paths:
-  /__mock/runs:
+  /sandbox/v1/health:
+    get:
+      operationId: getSandboxHealth
+      security: []
+      responses:
+        "200":
+          description: Worker and durable storage are available
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "503":
+          description: Durable storage is unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthUnavailable" }
+  /sandbox/v1/runs:
     post:
       operationId: createRun
       security: []
@@ -14,8 +29,8 @@ paths:
         "201":
           description: Run and one-time credentials
           content: { application/json: { schema: { $ref: "#/components/schemas/CreatedRun" } } }
-        "429": { $ref: "#/components/responses/MockError" }
-  /__mock/runs/{runId}:
+        "429": { $ref: "#/components/responses/ControlError" }
+  /sandbox/v1/runs/{runId}:
     parameters: [{ $ref: "#/components/parameters/RunId" }]
     get:
       operationId: getRun
@@ -23,9 +38,9 @@ paths:
       responses:
         {
           "200": { $ref: "#/components/responses/Run" },
-          "401": { $ref: "#/components/responses/MockError" },
-          "403": { $ref: "#/components/responses/MockError" },
-          "404": { $ref: "#/components/responses/MockError" },
+          "401": { $ref: "#/components/responses/ControlError" },
+          "403": { $ref: "#/components/responses/ControlError" },
+          "404": { $ref: "#/components/responses/ControlError" },
         }
     delete:
       operationId: deleteRun
@@ -33,9 +48,9 @@ paths:
       responses:
         {
           "204": { description: Run storage deleted },
-          default: { $ref: "#/components/responses/MockError" },
+          default: { $ref: "#/components/responses/ControlError" },
         }
-  /__mock/runs/{runId}/scenario:
+  /sandbox/v1/runs/{runId}/scenario:
     parameters: [{ $ref: "#/components/parameters/RunId" }]
     get:
       operationId: getScenario
@@ -43,7 +58,7 @@ paths:
       responses:
         {
           "200": { $ref: "#/components/responses/Scenario" },
-          default: { $ref: "#/components/responses/MockError" },
+          default: { $ref: "#/components/responses/ControlError" },
         }
     put:
       operationId: updateScenario
@@ -56,10 +71,10 @@ paths:
       responses:
         {
           "200": { $ref: "#/components/responses/Scenario" },
-          "400": { $ref: "#/components/responses/MockError" },
-          default: { $ref: "#/components/responses/MockError" },
+          "400": { $ref: "#/components/responses/ControlError" },
+          default: { $ref: "#/components/responses/ControlError" },
         }
-  /__mock/runs/{runId}/state:
+  /sandbox/v1/runs/{runId}/state:
     parameters: [{ $ref: "#/components/parameters/RunId" }]
     get:
       operationId: getRunState
@@ -71,9 +86,9 @@ paths:
               description: Sanitized run state,
               content: { application/json: { schema: { type: object } } },
             },
-          default: { $ref: "#/components/responses/MockError" },
+          default: { $ref: "#/components/responses/ControlError" },
         }
-  /__mock/runs/{runId}/reset:
+  /sandbox/v1/runs/{runId}/reset:
     parameters: [{ $ref: "#/components/parameters/RunId" }]
     post:
       operationId: resetRun
@@ -81,7 +96,7 @@ paths:
       responses:
         {
           "200": { $ref: "#/components/responses/Run" },
-          default: { $ref: "#/components/responses/MockError" },
+          default: { $ref: "#/components/responses/ControlError" },
         }
   /oauth2/token:
     post:
@@ -146,10 +161,10 @@ components:
         schema: { type: string, pattern: "^run_[0-9a-f]{32}$" },
       }
   responses:
-    MockError:
+    ControlError:
       {
         description: Control API error,
-        content: { application/json: { schema: { $ref: "#/components/schemas/MockError" } } },
+        content: { application/json: { schema: { $ref: "#/components/schemas/ControlError" } } },
       }
     OAuthError:
       {
@@ -178,6 +193,36 @@ components:
         content: { application/json: { schema: { $ref: "#/components/schemas/Scenario" } } },
       }
   schemas:
+    Health:
+      type: object
+      required: [status, service, components]
+      properties:
+        status: { type: string, const: ok }
+        service: { type: string, const: ccv2 }
+        components:
+          type: object
+          required: [worker, storage]
+          properties:
+            worker: { type: string, const: ok }
+            storage: { type: string, const: ok }
+    HealthUnavailable:
+      type: object
+      required: [status, service, components, error]
+      properties:
+        status: { type: string, const: unavailable }
+        service: { type: string, const: ccv2 }
+        components:
+          type: object
+          required: [worker, storage]
+          properties:
+            worker: { type: string, const: ok }
+            storage: { type: string, const: unavailable }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, const: storage_unavailable }
+            message: { type: string }
     CreatedRun:
       type: object
       required: [runId, controlToken, expiresAt, credentials]
@@ -242,7 +287,7 @@ components:
               retryAfterSeconds: { type: integer, minimum: 1 }
               title: { type: string }
               detail: { type: string }
-    MockError:
+    ControlError:
       type: object
       required: [error]
       properties:

@@ -42,7 +42,7 @@ describe("authentication and abuse boundaries", () => {
       (await worker.default.fetch(builds, { headers: sapHeaders(wrongAudience) })).status,
     ).toBe(401);
     const mismatch = await worker.default.fetch(builds, {
-      headers: { ...sapHeaders(valid), "x-mock-run-id": second.runId },
+      headers: { ...sapHeaders(valid), "x-sandbox-run-id": second.runId },
     });
     expect(mismatch.status).toBe(403);
     const overlong = await worker.default.fetch(`${builds}/${"x".repeat(300)}`, {
@@ -77,7 +77,7 @@ describe("authentication and abuse boundaries", () => {
     const responses = [];
     for (let request = 0; request < 31; request += 1) {
       responses.push(
-        await worker.default.fetch("https://example.com/__mock/runs", {
+        await worker.default.fetch("https://example.com/sandbox/v1/runs", {
           method: "POST",
           headers: { "CF-Connecting-IP": "198.51.100.254" },
         }),

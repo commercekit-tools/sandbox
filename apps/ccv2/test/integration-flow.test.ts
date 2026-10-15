@@ -74,14 +74,17 @@ describe("complete Worker-runtime integration flows", () => {
     expect(environmentBody.value.find(({ code }) => code === "d1")).toMatchObject({
       deploymentStatus: "DEPLOYED",
     });
-    const state = await worker.default.fetch(`https://example.com/__mock/runs/${run.runId}/state`, {
-      headers: controlHeaders(run),
-    });
+    const state = await worker.default.fetch(
+      `https://example.com/sandbox/v1/runs/${run.runId}/state`,
+      {
+        headers: controlHeaders(run),
+      },
+    );
     await expect(state.json()).resolves.toMatchObject({ counts: { builds: 1, deployments: 1 } });
 
     expect(
       (
-        await worker.default.fetch(`https://example.com/__mock/runs/${run.runId}`, {
+        await worker.default.fetch(`https://example.com/sandbox/v1/runs/${run.runId}`, {
           method: "DELETE",
           headers: controlHeaders(run),
         })

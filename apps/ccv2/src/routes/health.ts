@@ -6,7 +6,7 @@ const HEALTH_OBJECT_NAME = "__ccv2_health__";
 
 export const healthRoutes = new Hono<AppEnvironment>();
 
-healthRoutes.get("/__mock/health", async (context) => {
+healthRoutes.get("/sandbox/v1/health", async (context) => {
   context.header("Cache-Control", "no-store");
 
   try {
@@ -47,7 +47,7 @@ healthRoutes.get("/__mock/health", async (context) => {
   }
 });
 
-healthRoutes.all("/__mock/health", (context) => {
+healthRoutes.all("/sandbox/v1/health", (context) => {
   context.header("Allow", "GET");
   context.header("Cache-Control", "no-store");
   return context.json(

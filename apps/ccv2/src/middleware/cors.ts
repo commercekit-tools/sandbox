@@ -5,7 +5,7 @@ import type { AppEnvironment } from "../types";
 const DEFAULT_ALLOWED_ORIGIN = "https://commercekit.tools";
 const ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
 const ALLOWED_HEADERS =
-  "Authorization, Content-Type, x-mock-run-id, x-approuter-authorization, x-request-id";
+  "Authorization, Content-Type, x-sandbox-run-id, x-approuter-authorization, x-request-id";
 
 function allowedOrigins(configuredOrigins: string | undefined): ReadonlySet<string> {
   const value = configuredOrigins?.trim() ?? DEFAULT_ALLOWED_ORIGIN;
