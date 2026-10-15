@@ -35,7 +35,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Validate generated Worker types
-        run: pnpm --filter @commercekit-tools/sandbox-ccv2 types:check
+        run: pnpm --filter @commercekit/sandbox-ccv2 types:check
 
       - name: Check formatting
         run: pnpm format:check
@@ -45,6 +45,9 @@ jobs:
 
       - name: Type-check
         run: pnpm typecheck
+
+      - name: Validate OpenAPI contracts
+        run: pnpm --filter @commercekit/sandbox-ccv2 openapi:check
 
       - name: Test
         run: pnpm test
