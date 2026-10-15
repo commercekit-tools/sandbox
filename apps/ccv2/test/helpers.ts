@@ -42,3 +42,21 @@ export async function issueToken(run: CreatedRun): Promise<string> {
   const body = await response.json<{ access_token: string }>();
   return body.access_token;
 }
+
+export function sapHeaders(token: string): Record<string, string> {
+  return { "x-approuter-authorization": `Bearer ${token}` };
+}
+
+export async function configureScenario(run: CreatedRun, scenario: unknown): Promise<void> {
+  const response = await worker.default.fetch(
+    `https://example.com/__mock/runs/${run.runId}/scenario`,
+    {
+      method: "PUT",
+      headers: { ...controlHeaders(run), "Content-Type": "application/json" },
+      body: JSON.stringify(scenario),
+    },
+  );
+  if (response.status !== 200) {
+    throw new Error(`Scenario update failed with ${String(response.status)}`);
+  }
+}

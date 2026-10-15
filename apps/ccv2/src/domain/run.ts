@@ -48,6 +48,7 @@ export type RunResult<T> =
       status: 400 | 401 | 403 | 404 | 409 | 412 | 423 | 429 | 500;
       code: string;
       message: string;
+      retryAfterSeconds?: number;
     };
 
 export function runIdFromClientId(clientId: string): string | undefined {

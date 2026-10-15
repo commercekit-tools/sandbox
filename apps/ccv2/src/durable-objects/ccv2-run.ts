@@ -2,6 +2,13 @@ import { DurableObject } from "cloudflare:workers";
 
 import { timingSafeTextEqual } from "../auth/crypto";
 import type {
+  BuildDetail,
+  BuildListOptions,
+  BuildProgress,
+  CreateBuildRequest,
+} from "../domain/build";
+import { SUBSCRIPTION_CODE } from "../domain/fixtures";
+import type {
   OperationFault,
   RunInitialization,
   RunResult,
@@ -54,6 +61,16 @@ interface CounterRow {
   operation_id: string;
   resource_id: string;
   call_count: number;
+}
+
+interface BuildRow {
+  [column: string]: SqlStorageValue;
+  code: string;
+  subscription_code: string;
+  state_json: string;
+  scenario_json: string;
+  poll_count: number;
+  created_at: string;
 }
 
 export class Ccv2Run extends DurableObject<CloudflareBindings> {
@@ -237,6 +254,220 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
     };
   }
 
+  createBuild(
+    subscriptionCode: string,
+    request: CreateBuildRequest,
+  ): RunResult<{ code: string; subscriptionCode: string }> {
+    const subscriptionError = this.checkSubscription<{ code: string; subscriptionCode: string }>(
+      subscriptionCode,
+    );
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<{ code: string; subscriptionCode: string }>("createBuild");
+    if (fault) return fault;
+    const count = this.ctx.storage.sql
+      .exec<CountRow>("SELECT COUNT(*) AS count FROM builds")
+      .one().count;
+    if (count >= 100) {
+      return this.failure(429, "build_quota_exceeded", "This run already contains 100 builds.");
+    }
+    const code = `build_${String(count + 1).padStart(6, "0")}`;
+    const now = new Date().toISOString();
+    const detail: BuildDetail = {
+      subscriptionCode,
+      branch: request.branch,
+      name: request.name,
+      code,
+      buildVersion: "1",
+      createdBy: "sandbox-technical-user",
+      status: "SCHEDULED",
+      isPreview: false,
+      hasSnapshot: false,
+      deployed: false,
+      properties: [],
+    };
+    if (request.applicationCode !== undefined) detail.applicationCode = request.applicationCode;
+    this.ctx.storage.sql.exec(
+      `INSERT INTO builds
+        (code, subscription_code, state_json, scenario_json, poll_count, created_at)
+       VALUES (?, ?, ?, ?, 0, ?)`,
+      code,
+      subscriptionCode,
+      JSON.stringify(detail),
+      JSON.stringify(this.scenario().build),
+      now,
+    );
+    this.recordEvent("build.created", "createBuild", code, 201);
+    console.log(
+      JSON.stringify({
+        event: "ccv2.build.created",
+        runId: this.metadataRow()?.run_id,
+        operationId: "createBuild",
+        resourceId: code,
+        status: 201,
+      }),
+    );
+    return { ok: true, value: { code, subscriptionCode } };
+  }
+
+  listBuilds(
+    subscriptionCode: string,
+    options: BuildListOptions,
+  ): RunResult<{ value: BuildDetail[]; count: number }> {
+    const subscriptionError = this.checkSubscription<{ value: BuildDetail[]; count: number }>(
+      subscriptionCode,
+    );
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<{ value: BuildDetail[]; count: number }>("getBuilds");
+    if (fault) return fault;
+    const direction = options.orderBy.endsWith("desc") ? "DESC" : "ASC";
+    const column = options.orderBy.startsWith("name")
+      ? "json_extract(state_json, '$.name')"
+      : "created_at";
+    const rows = this.ctx.storage.sql
+      .exec<BuildRow>(
+        `SELECT code, subscription_code, state_json, scenario_json, poll_count, created_at
+         FROM builds WHERE subscription_code = ? ORDER BY ${column} ${direction}, code ASC`,
+        subscriptionCode,
+      )
+      .toArray();
+    const filtered = rows
+      .map((row) => this.buildDetail(row))
+      .filter((build) => options.statusNot === undefined || build.status !== options.statusNot);
+    return {
+      ok: true,
+      value: {
+        value: filtered.slice(options.skip, options.skip + options.top),
+        count: filtered.length,
+      },
+    };
+  }
+
+  getBuild(subscriptionCode: string, buildCode: string): RunResult<BuildDetail> {
+    const subscriptionError = this.checkSubscription<BuildDetail>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<BuildDetail>("getBuild", buildCode);
+    if (fault) return fault;
+    const row = this.buildRow(subscriptionCode, buildCode);
+    if (!row) return this.failure(404, "build_not_found", "The build was not found.");
+    return { ok: true, value: this.buildDetail(row) };
+  }
+
+  getBuildProgress(subscriptionCode: string, buildCode: string): RunResult<BuildProgress> {
+    const subscriptionError = this.checkSubscription<BuildProgress>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<BuildProgress>("getBuildProgress", buildCode);
+    if (fault) return fault;
+    const row = this.buildRow(subscriptionCode, buildCode);
+    if (!row) return this.failure(404, "build_not_found", "The build was not found.");
+    const detail = this.buildDetail(row);
+    const snapshot = JSON.parse(row.scenario_json) as Scenario["build"];
+    let pollCount = row.poll_count;
+    const isTerminal = ["SUCCESS", "FAIL", "DELETED"].includes(detail.status);
+    if (!isTerminal) {
+      pollCount += 1;
+      const now = new Date().toISOString();
+      detail.buildStartTimestamp ??= now;
+      if (snapshot.outcome !== "NEVER" && pollCount > snapshot.pollsBeforeTerminal) {
+        detail.status = snapshot.outcome;
+        detail.buildEndTimestamp = now;
+        detail.hasSnapshot = snapshot.outcome === "SUCCESS";
+        this.recordEvent("build.terminal", "getBuildProgress", buildCode, 200, {
+          status: detail.status,
+        });
+        console.log(
+          JSON.stringify({
+            event: "ccv2.build.terminal",
+            runId: this.metadataRow()?.run_id,
+            operationId: "getBuildProgress",
+            resourceId: buildCode,
+            status: detail.status,
+          }),
+        );
+      } else {
+        detail.status = "BUILDING";
+      }
+      this.ctx.storage.sql.exec(
+        "UPDATE builds SET state_json = ?, poll_count = ? WHERE code = ?",
+        JSON.stringify(detail),
+        pollCount,
+        buildCode,
+      );
+    }
+    const terminal = detail.status === "SUCCESS" || detail.status === "FAIL";
+    const percentage = terminal
+      ? 100
+      : Math.min(90, Math.floor((pollCount / (snapshot.pollsBeforeTerminal + 1)) * 100));
+    const progress: BuildProgress = {
+      subscriptionCode,
+      buildCode,
+      numberOfTasks: 3,
+      percentage,
+      buildStatus: detail.status,
+      startedTasks: detail.buildStartTimestamp
+        ? [{ task: "build", name: "Build application", startTimestamp: detail.buildStartTimestamp }]
+        : [],
+    };
+    if (detail.status === "FAIL") {
+      progress.errorMessage = snapshot.failureMessage ?? "The simulated build failed.";
+    }
+    return { ok: true, value: progress };
+  }
+
+  getBuildLog(
+    subscriptionCode: string,
+    buildCode: string,
+  ): RunResult<{ filename: string; content: string }> {
+    const subscriptionError = this.checkSubscription<{ filename: string; content: string }>(
+      subscriptionCode,
+    );
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<{ filename: string; content: string }>(
+      "getBuildLogs",
+      buildCode,
+    );
+    if (fault) return fault;
+    const row = this.buildRow(subscriptionCode, buildCode);
+    if (!row) return this.failure(404, "build_not_found", "The build was not found.");
+    const snapshot = JSON.parse(row.scenario_json) as Scenario["build"];
+    const detail = this.buildDetail(row);
+    if (!snapshot.logsAvailable || detail.status === "DELETED") {
+      return this.failure(404, "build_logs_not_found", "Build logs are unavailable.");
+    }
+    const content = [
+      `Build: ${detail.code}`,
+      `Name: ${detail.name}`,
+      `Branch: ${detail.branch}`,
+      `Status: ${detail.status}`,
+      "Generated by CommerceKit CCv2 Sandbox.",
+      "",
+    ].join("\n");
+    return { ok: true, value: { filename: `${buildCode}.log`, content } };
+  }
+
+  deleteBuild(subscriptionCode: string, buildCode: string): RunResult<null> {
+    const subscriptionError = this.checkSubscription<null>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<null>("deleteBuild", buildCode);
+    if (fault) return fault;
+    const row = this.buildRow(subscriptionCode, buildCode);
+    if (!row) return this.failure(404, "build_not_found", "The build was not found.");
+    const detail = this.buildDetail(row);
+    if (detail.status === "SCHEDULED" || detail.status === "BUILDING") {
+      return this.failure(409, "build_in_progress", "A build in progress cannot be deleted.");
+    }
+    if (detail.deployed) {
+      return this.failure(409, "build_in_use", "A deployed build cannot be deleted.");
+    }
+    detail.status = "DELETED";
+    this.ctx.storage.sql.exec(
+      "UPDATE builds SET state_json = ? WHERE code = ?",
+      JSON.stringify(detail),
+      buildCode,
+    );
+    this.recordEvent("build.deleted", "deleteBuild", buildCode, 204);
+    return { ok: true, value: null };
+  }
+
   async getScenario(controlTokenHash: string): Promise<RunResult<Scenario>> {
     const authorization = await this.authorizeControl(controlTokenHash);
     if (!authorization.ok) return authorization;
@@ -407,6 +638,21 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
       .toArray()[0];
   }
 
+  private buildRow(subscriptionCode: string, buildCode: string): BuildRow | undefined {
+    return this.ctx.storage.sql
+      .exec<BuildRow>(
+        `SELECT code, subscription_code, state_json, scenario_json, poll_count, created_at
+         FROM builds WHERE subscription_code = ? AND code = ?`,
+        subscriptionCode,
+        buildCode,
+      )
+      .toArray()[0];
+  }
+
+  private buildDetail(row: BuildRow): BuildDetail {
+    return JSON.parse(row.state_json) as BuildDetail;
+  }
+
   private securityRow(): RunSecurityRow | undefined {
     return this.ctx.storage.sql
       .exec<RunSecurityRow>(
@@ -467,7 +713,21 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
     status: 400 | 401 | 403 | 404 | 409 | 412 | 423 | 429 | 500,
     code: string,
     message: string,
+    retryAfterSeconds?: number,
   ): RunResult<T> {
-    return { ok: false, status, code, message };
+    const result: Extract<RunResult<T>, { ok: false }> = { ok: false, status, code, message };
+    if (retryAfterSeconds !== undefined) result.retryAfterSeconds = retryAfterSeconds;
+    return result;
+  }
+
+  private checkSubscription<T>(subscriptionCode: string): RunResult<T> | undefined {
+    if (subscriptionCode === SUBSCRIPTION_CODE) return undefined;
+    return this.failure(404, "subscription_not_found", "The subscription was not found.");
+  }
+
+  private faultFailure<T>(operationId: string, resourceIdentifier = ""): RunResult<T> | undefined {
+    const fault = this.consumeFault(operationId, resourceIdentifier);
+    if (!fault) return undefined;
+    return this.failure(fault.status, "simulated_error", fault.detail, fault.retryAfterSeconds);
   }
 }

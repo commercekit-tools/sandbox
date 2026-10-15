@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 
+import { sapAuthentication } from "./auth/middleware";
 import { corsMiddleware } from "./middleware/cors";
+import { buildRoutes } from "./routes/builds";
 import { healthRoutes } from "./routes/health";
 import { mockControlRoutes } from "./routes/mock-control";
 import { oauthRoutes } from "./routes/oauth";
@@ -37,6 +39,8 @@ export function createApp(): Hono<AppEnvironment> {
   app.route("/", healthRoutes);
   app.route("/", oauthRoutes);
   app.route("/", mockControlRoutes);
+  app.use("/v2/*", sapAuthentication);
+  app.route("/", buildRoutes);
 
   app.notFound((context) => {
     context.header("Cache-Control", "no-store");
