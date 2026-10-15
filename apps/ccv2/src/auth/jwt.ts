@@ -58,7 +58,7 @@ export function parsePublicJwk(value: string): JWK {
   if (jwk.kty !== "RSA" || typeof jwk.n !== "string" || typeof jwk.e !== "string") {
     throw new Error("MOCK_JWT_PUBLIC_JWK must be an RSA public key");
   }
-  return jwk;
+  return { kty: "RSA", n: jwk.n, e: jwk.e };
 }
 
 export function publicJwks(env: CloudflareBindings): { keys: JWK[] } {

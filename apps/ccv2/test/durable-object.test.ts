@@ -63,4 +63,27 @@ describe("Ccv2Run Durable Object", () => {
     const afterEviction = await stub.getOrCreateRun("run-eviction-test");
     expect(afterEviction).toEqual(beforeEviction);
   });
+
+  it("preserves version 1 metadata while adding versioned schema tables", async () => {
+    const stub = env.CCV2_RUN.getByName("run-schema-upgrade-test");
+    await runInDurableObject(stub, (_instance: Ccv2Run, state) => {
+      state.storage.sql.exec(
+        `INSERT INTO run_metadata (singleton, run_id, created_at, schema_version)
+         VALUES (1, 'run-schema-upgrade-test', '2026-01-01T00:00:00.000Z', 1)`,
+      );
+    });
+    await evictDurableObject(stub);
+    const metadata = await stub.getOrCreateRun("run-schema-upgrade-test");
+    expect(metadata).toEqual({
+      runId: "run-schema-upgrade-test",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      schemaVersion: 1,
+    });
+    await runInDurableObject(stub, (_instance: Ccv2Run, state) => {
+      const migrations = state.storage.sql
+        .exec<{ version: number }>("SELECT version FROM schema_migrations ORDER BY version")
+        .toArray();
+      expect(migrations.map(({ version }) => version)).toEqual([1, 2]);
+    });
+  });
 });

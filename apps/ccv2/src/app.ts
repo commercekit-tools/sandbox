@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 
 import { sapAuthentication } from "./auth/middleware";
+import { bodyLimitMiddleware } from "./middleware/body-limit";
 import { corsMiddleware } from "./middleware/cors";
 import { buildRoutes } from "./routes/builds";
 import { deploymentRoutes } from "./routes/deployments";
@@ -15,6 +16,7 @@ export function createApp(): Hono<AppEnvironment> {
   const app = new Hono<AppEnvironment>();
 
   app.use("*", corsMiddleware);
+  app.use("*", bodyLimitMiddleware);
 
   app.get("/", (context) => {
     context.header("Cache-Control", "no-store");

@@ -389,6 +389,9 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
     if (fault) return fault;
     const row = this.buildRow(subscriptionCode, buildCode);
     if (!row) return this.failure(404, "build_not_found", "The build was not found.");
+    if (row.poll_count >= 1_000) {
+      return this.failure(429, "poll_limit_exceeded", "The build polling limit was exceeded.", 60);
+    }
     const detail = this.buildDetail(row);
     const snapshot = JSON.parse(row.scenario_json) as Scenario["build"];
     let pollCount = row.poll_count;
@@ -671,6 +674,14 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
     if (fault) return fault;
     const row = this.deploymentRow(subscriptionCode, deploymentCode);
     if (!row) return this.failure(404, "deployment_not_found", "The deployment was not found.");
+    if (row.poll_count >= 1_000) {
+      return this.failure(
+        429,
+        "poll_limit_exceeded",
+        "The deployment polling limit was exceeded.",
+        60,
+      );
+    }
     const detail = this.deploymentDetail(row);
     const snapshot = JSON.parse(row.scenario_json) as Scenario["deployment"];
     let pollCount = row.poll_count;
@@ -901,7 +912,7 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
   ): RunResult<TrafficSplit> {
     const subscriptionError = this.checkSubscription<TrafficSplit>(subscriptionCode);
     if (subscriptionError) return subscriptionError;
-    const fault = this.faultFailure<TrafficSplit>("getDeploymentTrafficSplit", deploymentCode);
+    const fault = this.faultFailure<TrafficSplit>("getTrafficSplit", deploymentCode);
     if (fault) return fault;
     const row = this.deploymentRow(subscriptionCode, deploymentCode);
     if (!row) return this.failure(404, "deployment_not_found", "The deployment was not found.");
@@ -915,7 +926,7 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
   ): RunResult<TrafficSplit> {
     const subscriptionError = this.checkSubscription<TrafficSplit>(subscriptionCode);
     if (subscriptionError) return subscriptionError;
-    const fault = this.faultFailure<TrafficSplit>("updateDeploymentTrafficSplit", deploymentCode);
+    const fault = this.faultFailure<TrafficSplit>("updateTrafficSplit", deploymentCode);
     if (fault) return fault;
     const row = this.deploymentRow(subscriptionCode, deploymentCode);
     if (!row) return this.failure(404, "deployment_not_found", "The deployment was not found.");
@@ -970,7 +981,7 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
     }>(subscriptionCode);
     if (subscriptionError) return subscriptionError;
     const fault = this.faultFailure<{ value: TrafficSplitHistoryEntry[]; count: number }>(
-      "getDeploymentTrafficSplitHistory",
+      "getTrafficSplitHistory",
       deploymentCode,
     );
     if (fault) return fault;
@@ -1160,27 +1171,32 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
     environmentCode: string,
     code: string,
     patchJson: string,
+    createStateJson = "",
   ): RunResult<string> {
     const scopeError = this.checkResourceScope<string>(subscriptionCode, environmentCode);
     if (scopeError) return scopeError;
     const fault = this.faultFailure<string>(operationId, code);
     if (fault) return fault;
     const existing = this.resourceRow(kind, subscriptionCode, environmentCode, code);
-    if (!existing) {
+    if (!existing && !createStateJson) {
       return this.failure(404, "resource_not_found", "The requested resource was not found.");
     }
-    const state = JSON.parse(existing.state_json) as Record<string, unknown>;
+    const state = JSON.parse(existing?.state_json ?? createStateJson) as Record<string, unknown>;
     const patch = JSON.parse(patchJson) as Record<string, unknown>;
     Object.assign(state, patch);
     const stored = JSON.stringify(state);
     this.ctx.storage.sql.exec(
-      `UPDATE resources SET state_json = ?
-       WHERE kind = ? AND subscription_code = ? AND environment_code = ? AND code = ?`,
-      stored,
+      `INSERT INTO resources
+        (kind, subscription_code, environment_code, code, state_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(kind, subscription_code, environment_code, code)
+       DO UPDATE SET state_json = excluded.state_json`,
       kind,
       subscriptionCode,
       environmentCode,
       code,
+      stored,
+      new Date().toISOString(),
     );
     this.recordEvent(`${kind}.updated`, operationId, code, 200);
     return { ok: true, value: stored };

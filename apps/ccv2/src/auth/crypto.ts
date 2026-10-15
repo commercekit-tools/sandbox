@@ -18,6 +18,9 @@ export async function secretVerifier(
   runId: string,
   secret: string,
 ): Promise<string> {
+  if (encoder.encode(signingKey).byteLength < 32) {
+    throw new Error("RUN_TOKEN_SIGNING_KEY must contain at least 32 bytes");
+  }
   const key = await crypto.subtle.importKey(
     "raw",
     encoder.encode(signingKey),

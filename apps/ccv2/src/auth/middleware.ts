@@ -27,6 +27,9 @@ export const sapAuthentication: MiddlewareHandler<AppEnvironment> = async (conte
         "The correlation run does not match the authenticated run.",
       );
     }
+    if (context.req.path.split("/").some((segment) => segment.length > 255)) {
+      return vendorProblem(400, "Bad Request", "A path identifier exceeds 255 characters.");
+    }
     const active = await context.env.CCV2_RUN.getByName(runId).getActiveRun();
     if (!active.ok || active.value.resource !== payload.aud) {
       return vendorProblem(

@@ -45,6 +45,10 @@ describe("authentication and abuse boundaries", () => {
       headers: { ...sapHeaders(valid), "x-mock-run-id": second.runId },
     });
     expect(mismatch.status).toBe(403);
+    const overlong = await worker.default.fetch(`${builds}/${"x".repeat(300)}`, {
+      headers: sapHeaders(valid),
+    });
+    expect(overlong.status).toBe(400);
   });
 
   it("serializes concurrent build creation into unique persistent resources", async () => {

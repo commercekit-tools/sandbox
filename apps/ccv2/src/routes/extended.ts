@@ -461,7 +461,7 @@ extendedRoutes.get(
   async (context) => {
     const stub = context.env.CCV2_RUN.getByName(context.get("runId"));
     const result = await stub.getResource(
-      "getEnvironmentScaling",
+      "getEnvironmentScalingDetail",
       "scaling",
       context.req.param("subscriptionCode"),
       context.req.param("environmentCode"),
@@ -487,15 +487,14 @@ extendedRoutes.patch(
         context.req.param("subscriptionCode"),
         context.req.param("environmentCode"),
       );
-      const state = { ...current, ...request };
-      const result = await context.env.CCV2_RUN.getByName(context.get("runId")).putResource(
-        "updateEnvironmentScaling",
+      const result = await context.env.CCV2_RUN.getByName(context.get("runId")).patchResource(
+        "updateEnvironmentScalingDetail",
         "scaling",
         context.req.param("subscriptionCode"),
         context.req.param("environmentCode"),
         "current",
-        JSON.stringify(state),
-        true,
+        JSON.stringify(request),
+        JSON.stringify(current),
       );
       return result.ok ? jsonResponse(parseStored(result.value)) : vendorError(result);
     } catch (error) {
@@ -756,7 +755,7 @@ extendedRoutes.get(
   "/v2/subscriptions/:subscriptionCode/certificates/:certificateCode",
   async (context) => {
     const result = await context.env.CCV2_RUN.getByName(context.get("runId")).getResource(
-      "getCertificate",
+      "getCertificateDetails",
       "certificate",
       context.req.param("subscriptionCode"),
       "",
@@ -782,7 +781,7 @@ extendedRoutes.delete(
 
 extendedRoutes.get("/v2/subscriptions/:subscriptionCode/roles", async (context) => {
   const authorization = await context.env.CCV2_RUN.getByName(context.get("runId")).listResources(
-    "getRoles",
+    "getAllRolesForSubscription",
     "roleCatalog",
     context.req.param("subscriptionCode"),
   );
@@ -796,7 +795,7 @@ extendedRoutes.get("/v2/subscriptions/:subscriptionCode/roles", async (context) 
 
 extendedRoutes.get("/v2/subscriptions/:subscriptionCode/userroleassignments", async (context) => {
   const result = await context.env.CCV2_RUN.getByName(context.get("runId")).listResources(
-    "getUserRoleAssignments",
+    "getAllUserRoleAssignments",
     "roleAssignment",
     context.req.param("subscriptionCode"),
   );
