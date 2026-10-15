@@ -34,14 +34,21 @@ policy. The binding remains the application-level enforcement point.
 Generate files in a secure temporary directory without printing their contents:
 
 ```bash
+set -euo pipefail
 umask 077
+
+# Run these checks from the repository root. Stop if the deployment listing says
+# that commercekit-sandbox-ccv2 does not exist: Wrangler is using the wrong
+# Cloudflare account or profile, and `secret put` would create a new Worker.
+pnpm --dir apps/ccv2 exec wrangler whoami
+pnpm --dir apps/ccv2 exec wrangler deployments list >/dev/null
+
 KEY_DIR="$(mktemp -d)"
 pnpm --filter @commercekit-tools/sandbox-ccv2 secrets:generate-production -- "$KEY_DIR"
-cd apps/ccv2
-pnpm exec wrangler secret put MOCK_JWT_PRIVATE_KEY < "$KEY_DIR/mock-jwt-private.pem"
-pnpm exec wrangler secret put MOCK_JWT_PUBLIC_JWK < "$KEY_DIR/mock-jwt-public.jwk"
-pnpm exec wrangler secret put MOCK_JWT_KID < "$KEY_DIR/mock-jwt-kid.txt"
-pnpm exec wrangler secret put RUN_TOKEN_SIGNING_KEY < "$KEY_DIR/run-token-signing-key.txt"
+pnpm --dir apps/ccv2 exec wrangler secret put MOCK_JWT_PRIVATE_KEY < "$KEY_DIR/mock-jwt-private.pem"
+pnpm --dir apps/ccv2 exec wrangler secret put MOCK_JWT_PUBLIC_JWK < "$KEY_DIR/mock-jwt-public.jwk"
+pnpm --dir apps/ccv2 exec wrangler secret put MOCK_JWT_KID < "$KEY_DIR/mock-jwt-kid.txt"
+pnpm --dir apps/ccv2 exec wrangler secret put RUN_TOKEN_SIGNING_KEY < "$KEY_DIR/run-token-signing-key.txt"
 rm -rf "$KEY_DIR"
 ```
 
