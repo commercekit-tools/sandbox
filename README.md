@@ -60,6 +60,19 @@ curl http://localhost:8787/openapi.json
 
 The health route performs a real SQLite query through the Durable Object binding.
 
+Run the bounded end-to-end suite against a local Worker:
+
+```bash
+pnpm smoke:ccv2
+```
+
+Production verification is deliberate and opt-in. It creates only disposable
+synthetic runs, redacts credentials, and attempts cleanup in `finally`:
+
+```bash
+CCV2_CONFIRM_PRODUCTION=1 pnpm smoke:production
+```
+
 ## Validation
 
 ```bash
@@ -86,7 +99,9 @@ deterministic scenarios and faults, build and deployment lifecycles, green decis
 cancellation, and the ten families in the independently authored Management API 2.0.12 inventory.
 Both OpenAPI documents, contract checks, and full Worker-runtime integration tests are included.
 SCIM remains outside the verified Management API scope, so no unverified SCIM routes are
-advertised.
+advertised. See the [contract audit](apps/ccv2/docs/contract-audit.md),
+[production assessment](apps/ccv2/docs/production-readiness.md), and
+[website integration contract](apps/ccv2/docs/website-integration.md).
 
 ## License
 

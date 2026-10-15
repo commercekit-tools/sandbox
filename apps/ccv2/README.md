@@ -119,7 +119,9 @@ Never put real SAP credentials into this public sandbox.
 
 See [architecture](docs/architecture.md), [authentication](docs/authentication.md),
 [scenarios](docs/scenarios.md), [API coverage](docs/api-coverage.md), and
-[deployment readiness](docs/cloudflare-deployment.md).
+[deployment readiness](docs/cloudflare-deployment.md). The final review artifacts
+are the [contract audit](docs/contract-audit.md), [production readiness report](docs/production-readiness.md),
+[SCIM decision](docs/scim-decision.md), and [website integration contract](docs/website-integration.md).
 
 ## Contracts and validation
 
@@ -138,6 +140,17 @@ pnpm --filter @commercekit/sandbox-ccv2 openapi:check
 pnpm build:check
 pnpm run ci
 ```
+
+The production-safe smoke runner defaults to the local Worker:
+
+```bash
+pnpm smoke:ccv2
+CCV2_CONFIRM_PRODUCTION=1 pnpm smoke:production
+```
+
+The production command is opt-in, bounded, uses synthetic credentials only, and
+attempts to delete every disposable run even after a failed assertion. It never
+prints client secrets, control tokens, or access tokens.
 
 Tests run in Cloudflare's Workers runtime with SQLite Durable Objects and
 ephemeral test signing material. `pnpm build:check` is a Wrangler dry run and
