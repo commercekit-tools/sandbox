@@ -41,7 +41,7 @@ describe("run control and synthetic OAuth", () => {
     expect(JSON.parse(text)).toMatchObject({
       runId: first.runId,
       scenario: DEFAULT_SCENARIO,
-      schemaVersion: 2,
+      schemaVersion: 3,
     });
   });
 
@@ -157,6 +157,7 @@ describe("run control and synthetic OAuth", () => {
 
   it("removes storage when the run alarm fires", async () => {
     const run = await createRun();
+    const token = await issueToken(run);
     const stub = env.CCV2_RUN.getByName(run.runId);
     expect(await runDurableObjectAlarm(stub)).toBe(true);
     const response = await worker.default.fetch(
@@ -166,6 +167,11 @@ describe("run control and synthetic OAuth", () => {
       },
     );
     expect(response.status).toBe(404);
+    const vendorResponse = await worker.default.fetch(
+      "https://example.com/v2/subscriptions/SUBSCRIPTION_001/builds",
+      { headers: { "x-approuter-authorization": `Bearer ${token}` } },
+    );
+    expect(vendorResponse.status).toBe(401);
   });
 
   it("enforces the scenario request size limit", async () => {

@@ -13,13 +13,16 @@ export class RequestProblem extends Error {
   }
 }
 
-export async function readJsonBody(context: Context<AppEnvironment>): Promise<unknown> {
+export async function readJsonBody(
+  context: Context<AppEnvironment>,
+  acceptedMediaTypes: readonly string[] = ["application/json"],
+): Promise<unknown> {
   const contentType = context.req.header("Content-Type")?.split(";", 1)[0]?.trim();
-  if (contentType !== "application/json") {
+  if (!contentType || !acceptedMediaTypes.includes(contentType)) {
     throw new RequestProblem(
       415,
       "unsupported_media_type",
-      "Content-Type must be application/json.",
+      `Content-Type must be ${acceptedMediaTypes.join(" or ")}.`,
     );
   }
   const declaredLength = Number(context.req.header("Content-Length") ?? 0);
@@ -39,7 +42,9 @@ export async function readJsonBody(context: Context<AppEnvironment>): Promise<un
 
 export function jsonResponse(value: unknown, status = 200, headers?: HeadersInit): Response {
   const responseHeaders = new Headers(headers);
-  responseHeaders.set("Content-Type", "application/json; charset=UTF-8");
+  if (!responseHeaders.has("Content-Type")) {
+    responseHeaders.set("Content-Type", "application/json; charset=UTF-8");
+  }
   responseHeaders.set("Cache-Control", "no-store");
   return new Response(JSON.stringify(value), { status, headers: responseHeaders });
 }
@@ -61,6 +66,7 @@ export function vendorProblem(
 }
 
 export function bearerToken(header: string | undefined): string | undefined {
+  if (header && header.length > 8_192) return undefined;
   const match = /^Bearer ([^\s]+)$/.exec(header ?? "");
   return match?.[1];
 }

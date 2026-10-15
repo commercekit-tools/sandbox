@@ -207,19 +207,27 @@ describe("extended SAP-compatible API families", () => {
     const initial = await worker.default.fetch(url, { headers: sapHeaders(token) });
     await expect(initial.json()).resolves.toEqual({
       key: "catalog",
-      value: "electronics",
+      value: { catalogId: "electronics" },
       flags: ["EDITABLE"],
     });
     const update = await worker.default.fetch(
       url,
-      jsonRequest(token, "PUT", { key: "catalog", value: "apparel", flags: ["EDITABLE"] }),
+      jsonRequest(token, "PUT", {
+        key: "catalog",
+        value: { catalogId: "apparel" },
+        flags: ["EDITABLE"],
+      }),
     );
     expect(update.status).toBe(200);
     const read = await worker.default.fetch(url, { headers: sapHeaders(token) });
-    await expect(read.json()).resolves.toMatchObject({ value: "apparel" });
+    await expect(read.json()).resolves.toMatchObject({ value: { catalogId: "apparel" } });
     expect(
-      (await worker.default.fetch(url, jsonRequest(token, "PUT", { key: "other", value: true })))
-        .status,
+      (
+        await worker.default.fetch(
+          url,
+          jsonRequest(token, "PUT", { key: "other", value: { enabled: true } }),
+        )
+      ).status,
     ).toBe(400);
   });
 
@@ -261,9 +269,7 @@ describe("extended SAP-compatible API families", () => {
     const roles = await worker.default.fetch(`${subscription}/roles`, {
       headers: sapHeaders(token),
     });
-    await expect(roles.json()).resolves.toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: "ROLE_VIEWER" })]),
-    );
+    await expect(roles.json()).resolves.toEqual(expect.arrayContaining(["ROLE_VIEWER"]));
     const creation = await worker.default.fetch(
       root,
       jsonRequest(token, "POST", {

@@ -39,18 +39,43 @@ function parseStored(value: string): Record<string, unknown> {
 }
 
 function page<T>(url: URL, values: T[]): { value: T[]; count: number } {
-  const parseInteger = (name: string, fallback: number, maximum: number): number => {
+  const parseInteger = (
+    name: string,
+    fallback: number,
+    minimum: number,
+    maximum: number,
+  ): number => {
     const raw = url.searchParams.get(name);
     if (raw === null) return fallback;
     const parsed = Number(raw);
-    if (!Number.isInteger(parsed) || parsed < 0 || parsed > maximum) {
-      throw new Error(`${name} must be an integer from 0 to ${String(maximum)}.`);
+    if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+      throw new Error(`${name} must be an integer from ${String(minimum)} to ${String(maximum)}.`);
     }
     return parsed;
   };
-  const top = parseInteger("$top", 100, 100);
-  const skip = parseInteger("$skip", 0, 100_000);
+  const top = parseInteger("$top", 100, 1, 100);
+  const skip = parseInteger("$skip", 0, 0, 100_000);
   return { value: values.slice(skip, skip + top), count: values.length };
+}
+
+function valuesFor(url: URL, name: string): string[] {
+  return url.searchParams
+    .getAll(name)
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function endpointSummary(value: Record<string, unknown>): Record<string, unknown> {
+  const protocol = typeof value.protocol === "string" ? value.protocol : "HTTPS";
+  const domainName =
+    typeof value.domainName === "string" ? value.domainName : "sandbox.invalid";
+  return {
+    ...value,
+    webProxy: value.webProxy ?? "public",
+    service: value.service ?? value.k8sService,
+    url: value.url ?? `${protocol.toLowerCase()}://${domainName}`,
+  };
 }
 
 function noContent(): Response {
@@ -63,7 +88,15 @@ extendedRoutes.get("/v2/subscriptions/:subscriptionCode/environments", async (co
   );
   if (!result.ok) return vendorError(result);
   try {
-    return jsonResponse(page(new URL(context.req.url), result.value.value));
+    const url = new URL(context.req.url);
+    const status = url.searchParams.get("status");
+    const deploymentStatus = url.searchParams.get("deploymentStatus");
+    let values = [...result.value.value];
+    if (status) values = values.filter((environment) => environment.status === status);
+    if (deploymentStatus) {
+      values = values.filter((environment) => environment.deploymentStatus === deploymentStatus);
+    }
+    return jsonResponse(page(url, values));
   } catch (error) {
     return vendorProblem(
       400,
@@ -85,11 +118,11 @@ extendedRoutes.get(
     if (!result.ok) return vendorError(result);
     try {
       const url = new URL(context.req.url);
-      let values = result.value.values.map((value) => parseStored(value));
+      let values = result.value.values.map((value) => endpointSummary(parseStored(value)));
       const webProxy = url.searchParams.get("webProxy");
       const service = url.searchParams.get("service");
       if (webProxy) values = values.filter((value) => value.webProxy === webProxy);
-      if (service) values = values.filter((value) => value.k8sService === service);
+      if (service) values = values.filter((value) => value.service === service);
       return jsonResponse(page(url, values));
     } catch (error) {
       return vendorProblem(
@@ -115,7 +148,9 @@ extendedRoutes.post(
         "endpoint",
         "code",
         code,
-        JSON.stringify({ ...state, maintenanceMode: state.maintenanceMode ?? false }),
+        JSON.stringify(
+          endpointSummary({ ...state, maintenanceMode: state.maintenanceMode ?? false }),
+        ),
       );
       return result.ok ? jsonResponse(parseStored(result.value), 201) : vendorError(result);
     } catch (error) {
@@ -136,7 +171,9 @@ extendedRoutes.get(
       context.req.param("environmentCode"),
       context.req.param("endpointCode"),
     );
-    return result.ok ? jsonResponse(parseStored(result.value)) : vendorError(result);
+    return result.ok
+      ? jsonResponse(endpointSummary(parseStored(result.value)))
+      : vendorError(result);
   },
 );
 
@@ -144,7 +181,9 @@ extendedRoutes.patch(
   "/v2/subscriptions/:subscriptionCode/environments/:environmentCode/endpoints/:endpointCode",
   async (context) => {
     try {
-      const request = await validatedBody(context, updateEndpointSchema);
+      const request = updateEndpointSchema.parse(
+        await readJsonBody(context, ["application/merge-patch+json", "application/json"]),
+      );
       const result = await context.env.CCV2_RUN.getByName(context.get("runId")).patchResource(
         "updateEndpoint",
         "endpoint",
@@ -153,7 +192,9 @@ extendedRoutes.patch(
         context.req.param("endpointCode"),
         JSON.stringify(request),
       );
-      return result.ok ? jsonResponse(parseStored(result.value)) : vendorError(result);
+      return result.ok
+        ? jsonResponse(endpointSummary(parseStored(result.value)))
+        : vendorError(result);
     } catch (error) {
       const response = bodyError(error);
       if (response) return response;
@@ -450,9 +491,31 @@ function defaultScaling(subscriptionCode: string, environmentCode: string) {
     subscriptionCode,
     environmentCode,
     hibernated: false,
-    kubernetesClusters: [{ code: "commerce", replicas: 2, size: "MEDIUM" }],
-    databaseSchemas: [{ code: "commerce", size: "MEDIUM" }],
-    services: [{ code: "backgroundProcessing", replicas: 1, size: "MEDIUM" }],
+    kubernetesClusters: [
+      { code: "commerce", maxWorkerCount: 2, workerVmType: { code: "M", name: "Medium" } },
+    ],
+    databaseSchemas: [
+      {
+        code: "commerce",
+        maxSizeInMb: 16_384,
+        haReplicaCount: 1,
+        performance: { code: "STANDARD", name: "Standard" },
+      },
+    ],
+    services: [
+      {
+        code: "backgroundProcessing",
+        replicas: 1,
+        requestsCpu: "500m",
+        noLimitsCpu: false,
+        requestsMemory: "1Gi",
+        memoryScaleFactor: 1,
+        storageSize: "10Gi",
+        scalingReplicasSupported: true,
+        memoryScaleFactorSupported: true,
+        autoscaling: { enabled: false, minReplicas: 1, maxReplicas: 4 },
+      },
+    ],
   };
 }
 
@@ -520,10 +583,28 @@ extendedRoutes.get(
     if (!authorization.ok) return vendorError(authorization);
     return jsonResponse({
       kubernetesClusters: [
-        { code: "commerce", replicas: [1, 2, 3, 4], sizes: ["SMALL", "MEDIUM", "LARGE"] },
+        {
+          code: "commerce",
+          options: [
+            { maxWorkerCount: 2, workerVmType: { code: "M", name: "Medium" } },
+            { maxWorkerCount: 4, workerVmType: { code: "L", name: "Large" } },
+          ],
+        },
       ],
-      databaseSchemas: [{ code: "commerce", sizes: ["SMALL", "MEDIUM", "LARGE"] }],
-      services: [{ code: "backgroundProcessing", replicas: [1, 2, 3, 4] }],
+      databaseSchemas: [
+        {
+          code: "commerce",
+          options: [
+            {
+              maxSizesInMb: [16_384, 32_768, 65_536],
+              performance: { code: "STANDARD", name: "Standard" },
+            },
+          ],
+        },
+      ],
+      services: [
+        { code: "backgroundProcessing", options: [{ memoryScaleFactor: [0.5, 1, 2, 4] }] },
+      ],
     });
   },
 );
@@ -539,12 +620,30 @@ extendedRoutes.get(
     );
     if (!result.ok) return vendorError(result);
     try {
-      return jsonResponse(
-        page(
-          new URL(context.req.url),
-          result.value.values.map((value) => parseStored(value)),
-        ),
+      const url = new URL(context.req.url);
+      const statuses = valuesFor(url, "status");
+      const activityTypes = valuesFor(url, "activityType");
+      let values = result.value.values.map((value) => parseStored(value));
+      if (statuses.length > 0)
+        values = values.filter((value) => statuses.includes(String(value.status)));
+      if (activityTypes.length > 0) {
+        values = values.filter((value) => activityTypes.includes(String(value.activityType)));
+      }
+      const order = url.searchParams.get("$orderby") ?? "scheduledTimestamp desc";
+      const orderMatch = /^(scheduledTimestamp|createdTimestamp) (asc|desc)$/.exec(order);
+      if (!orderMatch) {
+        throw new Error(
+          "$orderby must be scheduledTimestamp or createdTimestamp with asc or desc.",
+        );
+      }
+      const field = orderMatch[1] as "scheduledTimestamp" | "createdTimestamp";
+      const direction = orderMatch[2];
+      values.sort((first, second) =>
+        direction === "asc"
+          ? String(first[field]).localeCompare(String(second[field]))
+          : String(second[field]).localeCompare(String(first[field])),
       );
+      return jsonResponse(page(url, values));
     } catch (error) {
       return vendorProblem(
         400,
@@ -666,7 +765,11 @@ extendedRoutes.get(
       context.req.param("serviceCode") === "commerce" &&
       context.req.param("propertyCode") === "catalog"
     ) {
-      return jsonResponse({ key: "catalog", value: "electronics", flags: ["EDITABLE"] });
+      return jsonResponse({
+        key: "catalog",
+        value: { catalogId: "electronics" },
+        flags: ["EDITABLE"],
+      });
     }
     return vendorError(result);
   },
@@ -786,11 +889,7 @@ extendedRoutes.get("/v2/subscriptions/:subscriptionCode/roles", async (context) 
     context.req.param("subscriptionCode"),
   );
   if (!authorization.ok) return vendorError(authorization);
-  return jsonResponse([
-    { code: "ROLE_VIEWER", name: "Viewer" },
-    { code: "ROLE_OPERATOR", name: "Operator" },
-    { code: "ROLE_ADMIN", name: "Administrator" },
-  ]);
+  return jsonResponse(["ROLE_VIEWER", "ROLE_OPERATOR", "ROLE_ADMIN"]);
 });
 
 extendedRoutes.get("/v2/subscriptions/:subscriptionCode/userroleassignments", async (context) => {

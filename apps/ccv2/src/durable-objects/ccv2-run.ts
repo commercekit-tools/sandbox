@@ -15,6 +15,7 @@ import type {
   DeploymentListOptions,
   DeploymentProgress,
   TrafficSplit,
+  TrafficSplitDetail,
   TrafficSplitHistoryEntry,
   TrafficSplitRequest,
 } from "../domain/deployment";
@@ -28,7 +29,7 @@ import type {
 } from "../domain/run";
 import { DEFAULT_SCENARIO, type Scenario } from "../domain/scenario";
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const MAX_EVENTS = 200;
 
 export interface RunMetadata {
@@ -65,6 +66,11 @@ interface ScenarioRow {
 interface CountRow {
   [column: string]: SqlStorageValue;
   count: number;
+}
+
+interface SequenceRow {
+  [column: string]: SqlStorageValue;
+  next_value: number;
 }
 
 interface CounterRow {
@@ -166,6 +172,13 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
         created_at TEXT NOT NULL,
         PRIMARY KEY (kind, subscription_code, environment_code, code)
       ) STRICT;
+      CREATE TABLE IF NOT EXISTS resource_sequences (
+        kind TEXT NOT NULL,
+        subscription_code TEXT NOT NULL,
+        environment_code TEXT NOT NULL DEFAULT '',
+        next_value INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (kind, subscription_code, environment_code)
+      ) STRICT;
       CREATE TABLE IF NOT EXISTS request_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         created_at TEXT NOT NULL,
@@ -186,6 +199,11 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
     this.ctx.storage.sql.exec(
       "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)",
       2,
+      now,
+    );
+    this.ctx.storage.sql.exec(
+      "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+      3,
       now,
     );
   }
@@ -362,7 +380,7 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
       .toArray();
     const filtered = rows
       .map((row) => this.buildDetail(row))
-      .filter((build) => options.statusNot === undefined || build.status !== options.statusNot);
+      .filter((build) => !options.statusNot?.includes(build.status));
     return {
       ok: true,
       value: {
@@ -909,24 +927,47 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
   getDeploymentTrafficSplit(
     subscriptionCode: string,
     deploymentCode: string,
-  ): RunResult<TrafficSplit> {
-    const subscriptionError = this.checkSubscription<TrafficSplit>(subscriptionCode);
+  ): RunResult<TrafficSplitDetail> {
+    const subscriptionError = this.checkSubscription<TrafficSplitDetail>(subscriptionCode);
     if (subscriptionError) return subscriptionError;
-    const fault = this.faultFailure<TrafficSplit>("getTrafficSplit", deploymentCode);
+    const fault = this.faultFailure<TrafficSplitDetail>("getTrafficSplit", deploymentCode);
     if (fault) return fault;
     const row = this.deploymentRow(subscriptionCode, deploymentCode);
     if (!row) return this.failure(404, "deployment_not_found", "The deployment was not found.");
-    return { ok: true, value: this.deploymentDetail(row).trafficSplit };
+    const detail = this.deploymentDetail(row);
+    const latest = this.ctx.storage.sql
+      .exec<ResourceRow>(
+        `SELECT code, state_json, created_at FROM resources
+         WHERE kind = 'trafficSplit' AND subscription_code = ? AND code LIKE ?
+         ORDER BY created_at DESC LIMIT 1`,
+        subscriptionCode,
+        `${deploymentCode}:%`,
+      )
+      .toArray()[0];
+    if (latest) {
+      return { ok: true, value: JSON.parse(latest.state_json) as TrafficSplitDetail };
+    }
+    return {
+      ok: true,
+      value: {
+        deploymentCode,
+        ...detail.trafficSplit,
+        lastModifiedTimestamp: detail.createdTimestamp,
+        lastModifiedBy: detail.createdBy,
+        subscriptionCode,
+        code: "current",
+      },
+    };
   }
 
   updateDeploymentTrafficSplit(
     subscriptionCode: string,
     deploymentCode: string,
     request: TrafficSplitRequest,
-  ): RunResult<TrafficSplit> {
-    const subscriptionError = this.checkSubscription<TrafficSplit>(subscriptionCode);
+  ): RunResult<TrafficSplitDetail> {
+    const subscriptionError = this.checkSubscription<TrafficSplitDetail>(subscriptionCode);
     if (subscriptionError) return subscriptionError;
-    const fault = this.faultFailure<TrafficSplit>("updateTrafficSplit", deploymentCode);
+    const fault = this.faultFailure<TrafficSplitDetail>("updateTrafficSplit", deploymentCode);
     if (fault) return fault;
     const row = this.deploymentRow(subscriptionCode, deploymentCode);
     if (!row) return this.failure(404, "deployment_not_found", "The deployment was not found.");
@@ -968,7 +1009,7 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
       JSON.stringify(history),
       history.lastModifiedTimestamp,
     );
-    return { ok: true, value: split };
+    return { ok: true, value: history };
   }
 
   getDeploymentTrafficSplitHistory(
@@ -1106,7 +1147,30 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
         `This run already contains 100 ${kind} resources.`,
       );
     }
-    const code = requestedCode || `${codePrefix}_${String(count + 1).padStart(6, "0")}`;
+    let code = requestedCode;
+    if (!code) {
+      this.ctx.storage.sql.exec(
+        `INSERT OR IGNORE INTO resource_sequences
+          (kind, subscription_code, environment_code, next_value)
+         VALUES (?, ?, ?, 0)`,
+        kind,
+        subscriptionCode,
+        environmentCode,
+      );
+      do {
+        const sequence = this.ctx.storage.sql
+          .exec<SequenceRow>(
+            `UPDATE resource_sequences SET next_value = next_value + 1
+             WHERE kind = ? AND subscription_code = ? AND environment_code = ?
+             RETURNING next_value`,
+            kind,
+            subscriptionCode,
+            environmentCode,
+          )
+          .one().next_value;
+        code = `${codePrefix}_${String(sequence).padStart(6, "0")}`;
+      } while (this.resourceRow(kind, subscriptionCode, environmentCode, code));
+    }
     if (this.resourceRow(kind, subscriptionCode, environmentCode, code)) {
       return this.failure(409, "resource_exists", "A resource with this code already exists.");
     }
@@ -1294,6 +1358,7 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
       this.ctx.storage.sql.exec("DELETE FROM builds");
       this.ctx.storage.sql.exec("DELETE FROM deployments");
       this.ctx.storage.sql.exec("DELETE FROM resources");
+      this.ctx.storage.sql.exec("DELETE FROM resource_sequences");
       this.ctx.storage.sql.exec("DELETE FROM operation_counters");
       this.ctx.storage.sql.exec("DELETE FROM request_events");
       this.ctx.storage.sql.exec(

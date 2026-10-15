@@ -10,6 +10,7 @@ import { healthRoutes } from "./routes/health";
 import { sandboxControlRoutes } from "./routes/sandbox-control";
 import { oauthRoutes } from "./routes/oauth";
 import { openapiRoutes } from "./routes/openapi";
+import { vendorProblem } from "./http";
 import type { AppEnvironment } from "./types";
 
 export function createApp(): Hono<AppEnvironment> {
@@ -51,6 +52,9 @@ export function createApp(): Hono<AppEnvironment> {
   app.route("/", extendedRoutes);
 
   app.notFound((context) => {
+    if (context.req.path.startsWith("/v2/")) {
+      return vendorProblem(404, "Not Found", "The requested resource was not found.");
+    }
     context.header("Cache-Control", "no-store");
     return context.json(
       {
@@ -73,6 +77,9 @@ export function createApp(): Hono<AppEnvironment> {
       }),
     );
 
+    if (context.req.path.startsWith("/v2/")) {
+      return vendorProblem(500, "Internal Server Error", "An unexpected error occurred.");
+    }
     context.header("Cache-Control", "no-store");
     return context.json(
       {

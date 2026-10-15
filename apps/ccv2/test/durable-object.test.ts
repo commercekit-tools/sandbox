@@ -36,7 +36,7 @@ describe("Ccv2Run Durable Object", () => {
     expect(first).toEqual(second);
     expect(first).toMatchObject({
       runId: "run-persistence-test",
-      schemaVersion: 2,
+      schemaVersion: 3,
     });
     expect(Number.isNaN(Date.parse(first.createdAt))).toBe(false);
   });
@@ -83,7 +83,7 @@ describe("Ccv2Run Durable Object", () => {
       const migrations = state.storage.sql
         .exec<{ version: number }>("SELECT version FROM schema_migrations ORDER BY version")
         .toArray();
-      expect(migrations.map(({ version }) => version)).toEqual([1, 2]);
+      expect(migrations.map(({ version }) => version)).toEqual([1, 2, 3]);
     });
   });
 });

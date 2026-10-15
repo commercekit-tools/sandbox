@@ -81,7 +81,7 @@ buildRoutes.get("/v2/subscriptions/:subscriptionCode/builds/:buildCode/logs", as
   return new Response(archive, {
     status: 200,
     headers: {
-      "Content-Type": "application/zip",
+      "Content-Type": "application/octet-stream",
       "Content-Disposition": `attachment; filename="${context.req.param("buildCode")}-logs.zip"`,
       "Cache-Control": "no-store",
     },
