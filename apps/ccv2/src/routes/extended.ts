@@ -68,8 +68,7 @@ function valuesFor(url: URL, name: string): string[] {
 
 function endpointSummary(value: Record<string, unknown>): Record<string, unknown> {
   const protocol = typeof value.protocol === "string" ? value.protocol : "HTTPS";
-  const domainName =
-    typeof value.domainName === "string" ? value.domainName : "sandbox.invalid";
+  const domainName = typeof value.domainName === "string" ? value.domainName : "sandbox.invalid";
   return {
     ...value,
     webProxy: value.webProxy ?? "public",
