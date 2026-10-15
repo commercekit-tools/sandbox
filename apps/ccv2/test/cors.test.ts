@@ -1,0 +1,62 @@
+import { exports as worker } from "cloudflare:workers";
+import { describe, expect, it } from "vitest";
+
+const ALLOWED_ORIGIN = "https://commercekit.tools";
+
+describe("CORS", () => {
+  it("grants access to the configured website origin", async () => {
+    const response = await worker.default.fetch("https://example.com/", {
+      headers: { Origin: ALLOWED_ORIGIN },
+    });
+
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(ALLOWED_ORIGIN);
+    expect(response.headers.get("Vary")).toContain("Origin");
+    expect(response.headers.has("Access-Control-Allow-Credentials")).toBe(false);
+  });
+
+  it("does not grant access to an unconfigured origin", async () => {
+    const response = await worker.default.fetch("https://example.com/", {
+      headers: { Origin: "https://untrusted.example" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.has("Access-Control-Allow-Origin")).toBe(false);
+    expect(response.headers.get("Vary")).toContain("Origin");
+  });
+
+  it("answers allowed preflight requests with the required methods and headers", async () => {
+    const response = await worker.default.fetch("https://example.com/__mock/health", {
+      method: "OPTIONS",
+      headers: {
+        Origin: ALLOWED_ORIGIN,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers":
+          "authorization,content-type,x-mock-run-id,x-approuter-authorization",
+      },
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(ALLOWED_ORIGIN);
+    expect(response.headers.get("Access-Control-Allow-Methods")).toBe(
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    );
+    expect(response.headers.get("Access-Control-Allow-Headers")).toBe(
+      "Authorization, Content-Type, x-mock-run-id, x-approuter-authorization",
+    );
+    expect(response.headers.get("Vary")).toContain("Origin");
+  });
+
+  it("does not grant CORS headers to a rejected preflight origin", async () => {
+    const response = await worker.default.fetch("https://example.com/__mock/health", {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://untrusted.example",
+        "Access-Control-Request-Method": "GET",
+      },
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.has("Access-Control-Allow-Origin")).toBe(false);
+    expect(response.headers.has("Access-Control-Allow-Methods")).toBe(false);
+  });
+});

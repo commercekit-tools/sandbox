@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "commercekit-sandbox-ccv2",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-14",
+
+  "workers_dev": true,
+  "preview_urls": false,
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CCV2_RUN",
+        "class_name": "Ccv2Run",
+      },
+    ],
+  },
+
+  "exports": {
+    "Ccv2Run": {
+      "type": "durable-object",
+      "storage": "sqlite",
+    },
+  },
+
+  "vars": {
+    "ALLOWED_ORIGINS": "https://commercekit.tools",
+  },
+
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1,
+    },
+  },
+}
