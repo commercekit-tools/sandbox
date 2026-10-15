@@ -36,7 +36,7 @@ describe("Ccv2Run Durable Object", () => {
     expect(first).toEqual(second);
     expect(first).toMatchObject({
       runId: "run-persistence-test",
-      schemaVersion: 1,
+      schemaVersion: 2,
     });
     expect(Number.isNaN(Date.parse(first.createdAt))).toBe(false);
   });

@@ -2,6 +2,8 @@ import { Hono } from "hono";
 
 import { corsMiddleware } from "./middleware/cors";
 import { healthRoutes } from "./routes/health";
+import { mockControlRoutes } from "./routes/mock-control";
+import { oauthRoutes } from "./routes/oauth";
 import type { AppEnvironment } from "./types";
 
 export function createApp(): Hono<AppEnvironment> {
@@ -33,6 +35,8 @@ export function createApp(): Hono<AppEnvironment> {
   });
 
   app.route("/", healthRoutes);
+  app.route("/", oauthRoutes);
+  app.route("/", mockControlRoutes);
 
   app.notFound((context) => {
     context.header("Cache-Control", "no-store");

@@ -464,6 +464,6 @@ export const managementOperations = [
   },
 ] as const satisfies readonly ManagementOperation[];
 
-export const managementOperationIds = new Set(
+export const managementOperationIds: ReadonlySet<string> = new Set(
   managementOperations.map(({ operationId }) => operationId),
 );
