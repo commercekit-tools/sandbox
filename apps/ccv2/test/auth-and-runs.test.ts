@@ -16,18 +16,24 @@ describe("run control and synthetic OAuth", () => {
     expect(first.credentials.tokenUrl).toBe("https://ccv2.sandbox.commercekit.tools/oauth2/token");
 
     const unauthorized = await worker.default.fetch(
-      `https://example.com/__mock/runs/${first.runId}`,
+      `https://example.com/sandbox/v1/runs/${first.runId}`,
     );
     expect(unauthorized.status).toBe(401);
 
-    const crossRun = await worker.default.fetch(`https://example.com/__mock/runs/${first.runId}`, {
-      headers: controlHeaders(second),
-    });
+    const crossRun = await worker.default.fetch(
+      `https://example.com/sandbox/v1/runs/${first.runId}`,
+      {
+        headers: controlHeaders(second),
+      },
+    );
     expect(crossRun.status).toBe(403);
 
-    const response = await worker.default.fetch(`https://example.com/__mock/runs/${first.runId}`, {
-      headers: controlHeaders(first),
-    });
+    const response = await worker.default.fetch(
+      `https://example.com/sandbox/v1/runs/${first.runId}`,
+      {
+        headers: controlHeaders(first),
+      },
+    );
     expect(response.status).toBe(200);
     const text = await response.text();
     expect(text).not.toContain(first.controlToken);
@@ -52,7 +58,7 @@ describe("run control and synthetic OAuth", () => {
       faults: [{ operationId: "getBuildProgress", status: 429, onCalls: [2] }],
     };
     const update = await worker.default.fetch(
-      `https://example.com/__mock/runs/${run.runId}/scenario`,
+      `https://example.com/sandbox/v1/runs/${run.runId}/scenario`,
       {
         method: "PUT",
         headers: { ...controlHeaders(run), "Content-Type": "application/json" },
@@ -62,13 +68,13 @@ describe("run control and synthetic OAuth", () => {
     expect(update.status).toBe(200);
 
     const read = await worker.default.fetch(
-      `https://example.com/__mock/runs/${run.runId}/scenario`,
+      `https://example.com/sandbox/v1/runs/${run.runId}/scenario`,
       { headers: controlHeaders(run) },
     );
     await expect(read.json()).resolves.toEqual(scenario);
 
     const invalid = await worker.default.fetch(
-      `https://example.com/__mock/runs/${run.runId}/scenario`,
+      `https://example.com/sandbox/v1/runs/${run.runId}/scenario`,
       {
         method: "PUT",
         headers: { ...controlHeaders(run), "Content-Type": "application/json" },
@@ -80,10 +86,13 @@ describe("run control and synthetic OAuth", () => {
     );
     expect(invalid.status).toBe(400);
 
-    const reset = await worker.default.fetch(`https://example.com/__mock/runs/${run.runId}/reset`, {
-      method: "POST",
-      headers: controlHeaders(run),
-    });
+    const reset = await worker.default.fetch(
+      `https://example.com/sandbox/v1/runs/${run.runId}/reset`,
+      {
+        method: "POST",
+        headers: controlHeaders(run),
+      },
+    );
     expect(reset.status).toBe(200);
     await expect(reset.json()).resolves.toMatchObject({ scenario: DEFAULT_SCENARIO });
     await expect(issueToken(run)).resolves.toEqual(expect.any(String));
@@ -128,15 +137,21 @@ describe("run control and synthetic OAuth", () => {
     expect((await post({ ...base, resource: "wrong-audience" })).status).toBe(401);
     expect((await post({ client_id: base.client_id })).status).toBe(400);
 
-    const deletion = await worker.default.fetch(`https://example.com/__mock/runs/${run.runId}`, {
-      method: "DELETE",
-      headers: controlHeaders(run),
-    });
+    const deletion = await worker.default.fetch(
+      `https://example.com/sandbox/v1/runs/${run.runId}`,
+      {
+        method: "DELETE",
+        headers: controlHeaders(run),
+      },
+    );
     expect(deletion.status).toBe(204);
     expect((await post(base)).status).toBe(401);
-    const inspection = await worker.default.fetch(`https://example.com/__mock/runs/${run.runId}`, {
-      headers: controlHeaders(run),
-    });
+    const inspection = await worker.default.fetch(
+      `https://example.com/sandbox/v1/runs/${run.runId}`,
+      {
+        headers: controlHeaders(run),
+      },
+    );
     expect(inspection.status).toBe(404);
   });
 
@@ -144,16 +159,19 @@ describe("run control and synthetic OAuth", () => {
     const run = await createRun();
     const stub = env.CCV2_RUN.getByName(run.runId);
     expect(await runDurableObjectAlarm(stub)).toBe(true);
-    const response = await worker.default.fetch(`https://example.com/__mock/runs/${run.runId}`, {
-      headers: controlHeaders(run),
-    });
+    const response = await worker.default.fetch(
+      `https://example.com/sandbox/v1/runs/${run.runId}`,
+      {
+        headers: controlHeaders(run),
+      },
+    );
     expect(response.status).toBe(404);
   });
 
   it("enforces the scenario request size limit", async () => {
     const run = await createRun();
     const response = await worker.default.fetch(
-      `https://example.com/__mock/runs/${run.runId}/scenario`,
+      `https://example.com/sandbox/v1/runs/${run.runId}/scenario`,
       {
         method: "PUT",
         headers: { ...controlHeaders(run), "Content-Type": "application/json" },

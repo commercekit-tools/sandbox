@@ -25,13 +25,13 @@ describe("CORS", () => {
   });
 
   it("answers allowed preflight requests with the required methods and headers", async () => {
-    const response = await worker.default.fetch("https://example.com/__mock/health", {
+    const response = await worker.default.fetch("https://example.com/sandbox/v1/health", {
       method: "OPTIONS",
       headers: {
         Origin: ALLOWED_ORIGIN,
         "Access-Control-Request-Method": "POST",
         "Access-Control-Request-Headers":
-          "authorization,content-type,x-mock-run-id,x-approuter-authorization",
+          "authorization,content-type,x-sandbox-run-id,x-approuter-authorization",
       },
     });
 
@@ -41,13 +41,13 @@ describe("CORS", () => {
       "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     );
     expect(response.headers.get("Access-Control-Allow-Headers")).toBe(
-      "Authorization, Content-Type, x-mock-run-id, x-approuter-authorization, x-request-id",
+      "Authorization, Content-Type, x-sandbox-run-id, x-approuter-authorization, x-request-id",
     );
     expect(response.headers.get("Vary")).toContain("Origin");
   });
 
   it("does not grant CORS headers to a rejected preflight origin", async () => {
-    const response = await worker.default.fetch("https://example.com/__mock/health", {
+    const response = await worker.default.fetch("https://example.com/sandbox/v1/health", {
       method: "OPTIONS",
       headers: {
         Origin: "https://untrusted.example",

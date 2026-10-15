@@ -33,7 +33,7 @@ The examples use `jq` and synthetic credentials created by the sandbox.
 BASE_URL="http://localhost:8787"
 
 # 1. Create a 24-hour run.
-RUN_JSON="$(curl --fail --silent --show-error -X POST "$BASE_URL/__mock/runs")"
+RUN_JSON="$(curl --fail --silent --show-error -X POST "$BASE_URL/sandbox/v1/runs")"
 RUN_ID="$(jq -r .runId <<<"$RUN_JSON")"
 CONTROL_TOKEN="$(jq -r .controlToken <<<"$RUN_JSON")"
 CLIENT_ID="$(jq -r .credentials.clientId <<<"$RUN_JSON")"
@@ -50,7 +50,7 @@ TOKEN_JSON="$(curl --fail --silent --show-error -X POST "$BASE_URL/oauth2/token"
 ACCESS_TOKEN="$(jq -r .access_token <<<"$TOKEN_JSON")"
 
 # 3. Configure successful build and deployment behavior.
-curl --fail --silent --show-error -X PUT "$BASE_URL/__mock/runs/$RUN_ID/scenario" \
+curl --fail --silent --show-error -X PUT "$BASE_URL/sandbox/v1/runs/$RUN_ID/scenario" \
   -H "Authorization: Bearer $CONTROL_TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{
@@ -96,11 +96,11 @@ for _ in 1 2 3; do
 done
 
 # 9. Inspect sanitized state; credentials and their verifiers are excluded.
-curl --fail --silent --show-error "$BASE_URL/__mock/runs/$RUN_ID/state" \
+curl --fail --silent --show-error "$BASE_URL/sandbox/v1/runs/$RUN_ID/state" \
   -H "Authorization: Bearer $CONTROL_TOKEN" | jq .
 
 # 10. Delete the run and all retained state.
-curl --fail --silent --show-error -X DELETE "$BASE_URL/__mock/runs/$RUN_ID" \
+curl --fail --silent --show-error -X DELETE "$BASE_URL/sandbox/v1/runs/$RUN_ID" \
   -H "Authorization: Bearer $CONTROL_TOKEN"
 ```
 
@@ -115,7 +115,7 @@ Never put real SAP credentials into this public sandbox.
 - `NEVER` stays `BUILDING` or `DEPLOYING`.
 - Green deployments support decisions, canary preparation, and traffic splits.
 - Reset clears resources, counters, and scenario configuration while preserving credentials and expiry.
-- Vendor errors use `application/problem+json`; control errors use the documented mock envelope.
+- Vendor errors use `application/problem+json`; control errors use the documented control envelope.
 
 See [architecture](docs/architecture.md), [authentication](docs/authentication.md),
 [scenarios](docs/scenarios.md), [API coverage](docs/api-coverage.md), and
@@ -124,9 +124,9 @@ See [architecture](docs/architecture.md), [authentication](docs/authentication.m
 ## Contracts and validation
 
 - Management API: `GET /openapi.json`
-- Mock-control API: `GET /openapi/mock.json`
+- Sandbox control API: `GET /openapi/sandbox.json`
 - JWKS: `GET /.well-known/jwks.json`
-- Health: `GET /__mock/health`
+- Health: `GET /sandbox/v1/health`
 
 ```bash
 pnpm types:ccv2

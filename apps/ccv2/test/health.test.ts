@@ -19,7 +19,7 @@ describe("CCv2 Worker HTTP API", () => {
   });
 
   it("reports Worker and SQLite storage health", async () => {
-    const response = await worker.default.fetch("https://example.com/__mock/health");
+    const response = await worker.default.fetch("https://example.com/sandbox/v1/health");
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toContain("application/json");
@@ -41,7 +41,7 @@ describe("CCv2 Worker HTTP API", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     try {
-      const response = await worker.default.fetch("https://example.com/__mock/health");
+      const response = await worker.default.fetch("https://example.com/sandbox/v1/health");
       const body = await response.text();
 
       expect(response.status).toBe(503);
@@ -79,7 +79,7 @@ describe("CCv2 Worker HTTP API", () => {
   });
 
   it("returns 405 for unsupported methods on known endpoints", async () => {
-    const response = await worker.default.fetch("https://example.com/__mock/health", {
+    const response = await worker.default.fetch("https://example.com/sandbox/v1/health", {
       method: "POST",
     });
 
