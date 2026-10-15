@@ -1,0 +1,29 @@
+{
+  "name": "@commercekit-tools/sandbox-ccv2",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "engines": {
+    "node": "24.x",
+    "pnpm": "12.11.2"
+  },
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "types": "wrangler types worker-configuration.d.ts --env-interface CloudflareBindings",
+    "types:check": "wrangler types worker-configuration.d.ts --env-interface CloudflareBindings --check",
+    "typecheck": "tsc --project tsconfig.json && tsc --project test/tsconfig.json",
+    "test": "vitest run",
+    "build:check": "wrangler deploy --dry-run --outdir .wrangler/build"
+  },
+  "dependencies": {
+    "hono": "4.13.13"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.2",
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11",
+    "wrangler": "4.151.0"
+  }
+}
