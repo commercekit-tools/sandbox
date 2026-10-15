@@ -990,6 +990,228 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
     return { ok: true, value: { value, count: value.length } };
   }
 
+  getEnvironments(
+    subscriptionCode: string,
+  ): RunResult<{ value: Record<string, string>[]; count: number }> {
+    interface Result {
+      value: Record<string, string>[];
+      count: number;
+    }
+    const subscriptionError = this.checkSubscription<Result>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<Result>("getEnvironments");
+    if (fault) return fault;
+    const deployments = this.deploymentRows(subscriptionCode).map((row) =>
+      this.deploymentDetail(row),
+    );
+    const value = ENVIRONMENTS.map((environment) => {
+      const latest = deployments
+        .filter(({ environmentCode }) => environmentCode === environment.code)
+        .at(-1);
+      return {
+        subscriptionCode: environment.subscriptionCode,
+        name: environment.name,
+        code: environment.code,
+        type: environment.type,
+        status: environment.status,
+        deploymentStatus: latest?.status ?? environment.deploymentStatus,
+      };
+    });
+    return { ok: true, value: { value, count: value.length } };
+  }
+
+  listResources(
+    operationId: string,
+    kind: string,
+    subscriptionCode: string,
+    environmentCode = "",
+  ): RunResult<{ values: string[]; count: number }> {
+    const scopeError = this.checkResourceScope<{ values: string[]; count: number }>(
+      subscriptionCode,
+      environmentCode,
+    );
+    if (scopeError) return scopeError;
+    const fault = this.faultFailure<{ values: string[]; count: number }>(operationId);
+    if (fault) return fault;
+    const rows = this.ctx.storage.sql
+      .exec<ResourceRow>(
+        `SELECT code, state_json, created_at FROM resources
+         WHERE kind = ? AND subscription_code = ? AND environment_code = ?
+         ORDER BY created_at DESC, code ASC`,
+        kind,
+        subscriptionCode,
+        environmentCode,
+      )
+      .toArray();
+    return {
+      ok: true,
+      value: { values: rows.map(({ state_json }) => state_json), count: rows.length },
+    };
+  }
+
+  getResource(
+    operationId: string,
+    kind: string,
+    subscriptionCode: string,
+    environmentCode: string,
+    code: string,
+  ): RunResult<string> {
+    const scopeError = this.checkResourceScope<string>(subscriptionCode, environmentCode);
+    if (scopeError) return scopeError;
+    const fault = this.faultFailure<string>(operationId, code);
+    if (fault) return fault;
+    const row = this.resourceRow(kind, subscriptionCode, environmentCode, code);
+    if (!row)
+      return this.failure(404, "resource_not_found", "The requested resource was not found.");
+    return { ok: true, value: row.state_json };
+  }
+
+  createResource(
+    operationId: string,
+    kind: string,
+    subscriptionCode: string,
+    environmentCode: string,
+    codePrefix: string,
+    codeField: string,
+    requestedCode: string,
+    stateJson: string,
+  ): RunResult<string> {
+    const scopeError = this.checkResourceScope<string>(subscriptionCode, environmentCode);
+    if (scopeError) return scopeError;
+    const fault = this.faultFailure<string>(operationId, requestedCode);
+    if (fault) return fault;
+    const count = this.ctx.storage.sql
+      .exec<CountRow>(
+        "SELECT COUNT(*) AS count FROM resources WHERE kind = ? AND subscription_code = ? AND environment_code = ?",
+        kind,
+        subscriptionCode,
+        environmentCode,
+      )
+      .one().count;
+    if (count >= 100) {
+      return this.failure(
+        429,
+        "resource_quota_exceeded",
+        `This run already contains 100 ${kind} resources.`,
+      );
+    }
+    const code = requestedCode || `${codePrefix}_${String(count + 1).padStart(6, "0")}`;
+    if (this.resourceRow(kind, subscriptionCode, environmentCode, code)) {
+      return this.failure(409, "resource_exists", "A resource with this code already exists.");
+    }
+    const parsed = JSON.parse(stateJson) as Record<string, unknown>;
+    if (codeField) parsed[codeField] = code;
+    const stored = JSON.stringify(parsed);
+    const now = new Date().toISOString();
+    this.ctx.storage.sql.exec(
+      `INSERT INTO resources
+        (kind, subscription_code, environment_code, code, state_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      kind,
+      subscriptionCode,
+      environmentCode,
+      code,
+      stored,
+      now,
+    );
+    this.recordEvent(`${kind}.created`, operationId, code, 201);
+    return { ok: true, value: stored };
+  }
+
+  putResource(
+    operationId: string,
+    kind: string,
+    subscriptionCode: string,
+    environmentCode: string,
+    code: string,
+    stateJson: string,
+    createWhenMissing: boolean,
+  ): RunResult<string> {
+    const scopeError = this.checkResourceScope<string>(subscriptionCode, environmentCode);
+    if (scopeError) return scopeError;
+    const fault = this.faultFailure<string>(operationId, code);
+    if (fault) return fault;
+    const existing = this.resourceRow(kind, subscriptionCode, environmentCode, code);
+    if (!existing && !createWhenMissing) {
+      return this.failure(404, "resource_not_found", "The requested resource was not found.");
+    }
+    const now = new Date().toISOString();
+    this.ctx.storage.sql.exec(
+      `INSERT INTO resources
+        (kind, subscription_code, environment_code, code, state_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(kind, subscription_code, environment_code, code)
+       DO UPDATE SET state_json = excluded.state_json`,
+      kind,
+      subscriptionCode,
+      environmentCode,
+      code,
+      stateJson,
+      now,
+    );
+    this.recordEvent(`${kind}.updated`, operationId, code, 200);
+    return { ok: true, value: stateJson };
+  }
+
+  patchResource(
+    operationId: string,
+    kind: string,
+    subscriptionCode: string,
+    environmentCode: string,
+    code: string,
+    patchJson: string,
+  ): RunResult<string> {
+    const scopeError = this.checkResourceScope<string>(subscriptionCode, environmentCode);
+    if (scopeError) return scopeError;
+    const fault = this.faultFailure<string>(operationId, code);
+    if (fault) return fault;
+    const existing = this.resourceRow(kind, subscriptionCode, environmentCode, code);
+    if (!existing) {
+      return this.failure(404, "resource_not_found", "The requested resource was not found.");
+    }
+    const state = JSON.parse(existing.state_json) as Record<string, unknown>;
+    const patch = JSON.parse(patchJson) as Record<string, unknown>;
+    Object.assign(state, patch);
+    const stored = JSON.stringify(state);
+    this.ctx.storage.sql.exec(
+      `UPDATE resources SET state_json = ?
+       WHERE kind = ? AND subscription_code = ? AND environment_code = ? AND code = ?`,
+      stored,
+      kind,
+      subscriptionCode,
+      environmentCode,
+      code,
+    );
+    this.recordEvent(`${kind}.updated`, operationId, code, 200);
+    return { ok: true, value: stored };
+  }
+
+  deleteResource(
+    operationId: string,
+    kind: string,
+    subscriptionCode: string,
+    environmentCode: string,
+    code: string,
+  ): RunResult<null> {
+    const scopeError = this.checkResourceScope<null>(subscriptionCode, environmentCode);
+    if (scopeError) return scopeError;
+    const fault = this.faultFailure<null>(operationId, code);
+    if (fault) return fault;
+    if (!this.resourceRow(kind, subscriptionCode, environmentCode, code)) {
+      return this.failure(404, "resource_not_found", "The requested resource was not found.");
+    }
+    this.ctx.storage.sql.exec(
+      `DELETE FROM resources
+       WHERE kind = ? AND subscription_code = ? AND environment_code = ? AND code = ?`,
+      kind,
+      subscriptionCode,
+      environmentCode,
+      code,
+    );
+    this.recordEvent(`${kind}.deleted`, operationId, code, 204);
+    return { ok: true, value: null };
+  }
+
   async getScenario(controlTokenHash: string): Promise<RunResult<Scenario>> {
     const authorization = await this.authorizeControl(controlTokenHash);
     if (!authorization.ok) return authorization;
@@ -1186,6 +1408,24 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
       .toArray();
   }
 
+  private resourceRow(
+    kind: string,
+    subscriptionCode: string,
+    environmentCode: string,
+    code: string,
+  ): ResourceRow | undefined {
+    return this.ctx.storage.sql
+      .exec<ResourceRow>(
+        `SELECT code, state_json, created_at FROM resources
+         WHERE kind = ? AND subscription_code = ? AND environment_code = ? AND code = ?`,
+        kind,
+        subscriptionCode,
+        environmentCode,
+        code,
+      )
+      .toArray()[0];
+  }
+
   private deploymentRow(
     subscriptionCode: string,
     deploymentCode: string,
@@ -1343,6 +1583,18 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
   private checkSubscription<T>(subscriptionCode: string): RunResult<T> | undefined {
     if (subscriptionCode === SUBSCRIPTION_CODE) return undefined;
     return this.failure(404, "subscription_not_found", "The subscription was not found.");
+  }
+
+  private checkResourceScope<T>(
+    subscriptionCode: string,
+    environmentCode: string,
+  ): RunResult<T> | undefined {
+    const subscriptionError = this.checkSubscription<T>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    if (environmentCode && !environmentExists(environmentCode)) {
+      return this.failure(404, "environment_not_found", "The environment was not found.");
+    }
+    return undefined;
   }
 
   private faultFailure<T>(operationId: string, resourceIdentifier = ""): RunResult<T> | undefined {

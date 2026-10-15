@@ -4,6 +4,7 @@ import { sapAuthentication } from "./auth/middleware";
 import { corsMiddleware } from "./middleware/cors";
 import { buildRoutes } from "./routes/builds";
 import { deploymentRoutes } from "./routes/deployments";
+import { extendedRoutes } from "./routes/extended";
 import { healthRoutes } from "./routes/health";
 import { mockControlRoutes } from "./routes/mock-control";
 import { oauthRoutes } from "./routes/oauth";
@@ -43,6 +44,7 @@ export function createApp(): Hono<AppEnvironment> {
   app.use("/v2/*", sapAuthentication);
   app.route("/", buildRoutes);
   app.route("/", deploymentRoutes);
+  app.route("/", extendedRoutes);
 
   app.notFound((context) => {
     context.header("Cache-Control", "no-store");
