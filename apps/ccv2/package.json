@@ -14,14 +14,17 @@
     "types:check": "wrangler types worker-configuration.d.ts --env-interface CloudflareBindings --check",
     "typecheck": "tsc --project tsconfig.json && tsc --project test/tsconfig.json",
     "test": "vitest run",
+    "openapi:check": "node scripts/validate-openapi.js",
     "build:check": "wrangler deploy --dry-run --outdir .wrangler/build"
   },
   "dependencies": {
     "hono": "4.13.13",
     "jose": "^6.2.12",
+    "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^13.1.0",
     "@cloudflare/vitest-plugin": "1.4.2",
     "@types/node": "26.6.5",
     "typescript": "7.0.2",

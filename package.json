@@ -17,7 +17,7 @@
     "typecheck": "pnpm --filter @commercekit-tools/sandbox-ccv2 typecheck",
     "test": "pnpm --filter @commercekit-tools/sandbox-ccv2 test",
     "build:check": "pnpm --filter @commercekit-tools/sandbox-ccv2 build:check",
-    "ci": "pnpm --filter @commercekit-tools/sandbox-ccv2 types:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build:check"
+    "ci": "pnpm --filter @commercekit-tools/sandbox-ccv2 types:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm --filter @commercekit-tools/sandbox-ccv2 openapi:check && pnpm test && pnpm build:check"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
