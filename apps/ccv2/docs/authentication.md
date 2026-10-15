@@ -40,7 +40,7 @@ Worker startup.
 For local development, create ignored test values without printing them:
 
 ```bash
-pnpm --filter @commercekit-tools/sandbox-ccv2 secrets:generate
+pnpm --filter @commercekit/sandbox-ccv2 secrets:generate
 ```
 
 The command creates `apps/ccv2/.dev.vars` with mode `0600` and refuses to

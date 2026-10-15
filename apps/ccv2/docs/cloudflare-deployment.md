@@ -44,7 +44,7 @@ pnpm --dir apps/ccv2 exec wrangler whoami
 pnpm --dir apps/ccv2 exec wrangler deployments list >/dev/null
 
 KEY_DIR="$(mktemp -d)"
-pnpm --filter @commercekit-tools/sandbox-ccv2 secrets:generate-production -- "$KEY_DIR"
+pnpm --filter @commercekit/sandbox-ccv2 secrets:generate-production -- "$KEY_DIR"
 pnpm --dir apps/ccv2 exec wrangler secret put MOCK_JWT_PRIVATE_KEY < "$KEY_DIR/mock-jwt-private.pem"
 pnpm --dir apps/ccv2 exec wrangler secret put MOCK_JWT_PUBLIC_JWK < "$KEY_DIR/mock-jwt-public.jwk"
 pnpm --dir apps/ccv2 exec wrangler secret put MOCK_JWT_KID < "$KEY_DIR/mock-jwt-kid.txt"

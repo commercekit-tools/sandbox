@@ -16,7 +16,7 @@ documentation remains the authority:
 cd /Users/anil/projects/sandbox
 corepack enable
 pnpm install
-pnpm --filter @commercekit-tools/sandbox-ccv2 secrets:generate
+pnpm --filter @commercekit/sandbox-ccv2 secrets:generate
 pnpm dev:ccv2
 ```
 
@@ -134,7 +134,7 @@ pnpm lint
 pnpm format:check
 pnpm typecheck
 pnpm test
-pnpm --filter @commercekit-tools/sandbox-ccv2 openapi:check
+pnpm --filter @commercekit/sandbox-ccv2 openapi:check
 pnpm build:check
 pnpm run ci
 ```

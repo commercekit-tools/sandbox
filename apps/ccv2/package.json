@@ -1,5 +1,5 @@
 {
-  "name": "@commercekit-tools/sandbox-ccv2",
+  "name": "@commercekit/sandbox-ccv2",
   "version": "0.0.0",
   "private": true,
   "type": "module",

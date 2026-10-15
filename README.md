@@ -52,7 +52,7 @@ pnpm dev:ccv2
 Generate local signing material, then smoke-test the implemented routes:
 
 ```bash
-pnpm --filter @commercekit-tools/sandbox-ccv2 secrets:generate
+pnpm --filter @commercekit/sandbox-ccv2 secrets:generate
 curl http://localhost:8787/
 curl http://localhost:8787/__mock/health
 curl http://localhost:8787/openapi.json
