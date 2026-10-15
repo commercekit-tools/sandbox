@@ -1,0 +1,1077 @@
+openapi: 3.1.0
+info:
+  title: CommerceKit CCv2 Sandbox Management API
+  version: 2.0.12-sandbox.1
+  description: >-
+    Independently authored compatibility contract for the implemented subset of
+    SAP Commerce Cloud Management API 2.0.12. This document is not SAP's OpenAPI
+    specification. See https://help.sap.com/docs/SAP_COMMERCE_CLOUD_PUBLIC_CLOUD/0fa6bcf4736c46f78c248512391eb467/66abfe678b55457fab235ce8039dda71.html
+servers:
+  - url: https://ccv2.sandbox.commercekit.tools
+security:
+  - SapBearer: []
+tags:
+  - { name: build }
+  - { name: deployment }
+  - { name: environment }
+  - { name: endpoint }
+  - { name: databackup }
+  - { name: scaling }
+  - { name: scheduledActivity }
+  - { name: serviceProperties }
+  - { name: certificate }
+  - { name: userRoleAssignment }
+paths:
+  /v2/subscriptions/{subscriptionCode}/builds:
+    parameters: [{ $ref: "#/components/parameters/SubscriptionCode" }]
+    get:
+      tags: [build]
+      operationId: getBuilds
+      parameters:
+        - { $ref: "#/components/parameters/Top" }
+        - { $ref: "#/components/parameters/Skip" }
+        - { $ref: "#/components/parameters/OrderBy" }
+        - { $ref: "#/components/parameters/Count" }
+        - { name: statusNot, in: query, schema: { $ref: "#/components/schemas/BuildStatus" } }
+      responses:
+        "200":
+          {
+            description: Build collection,
+            content:
+              { application/json: { schema: { $ref: "#/components/schemas/BuildDetailsDTO" } } },
+          }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [build]
+      operationId: createBuild
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json: { schema: { $ref: "#/components/schemas/CreateBuildRequestDTO" } },
+            },
+        }
+      responses:
+        "201":
+          {
+            description: Build created,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/CreateBuildResponseDTO" } },
+              },
+          }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+        "500": { $ref: "#/components/responses/Problem" }
+  /v2/subscriptions/{subscriptionCode}/builds/{buildCode}:
+    parameters:
+      - { $ref: "#/components/parameters/SubscriptionCode" }
+      - { $ref: "#/components/parameters/BuildCode" }
+    get:
+      tags: [build]
+      operationId: getBuild
+      responses:
+        {
+          "200":
+            {
+              description: Build,
+              content:
+                { application/json: { schema: { $ref: "#/components/schemas/BuildDetailDTO" } } },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+    delete:
+      tags: [build]
+      operationId: deleteBuild
+      responses:
+        {
+          "204": { description: Build deleted },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /v2/subscriptions/{subscriptionCode}/builds/{buildCode}/progress:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/BuildCode" },
+      ]
+    get:
+      tags: [build]
+      operationId: getBuildProgress
+      responses:
+        {
+          "200":
+            {
+              description: Build progress,
+              content:
+                { application/json: { schema: { $ref: "#/components/schemas/BuildProgressDTO" } } },
+            },
+          "429": { $ref: "#/components/responses/Problem" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /v2/subscriptions/{subscriptionCode}/builds/{buildCode}/logs:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/BuildCode" },
+      ]
+    get:
+      tags: [build]
+      operationId: getBuildLogs
+      responses:
+        {
+          "200":
+            {
+              description: ZIP build log archive,
+              content: { application/zip: { schema: { type: string, format: binary } } },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /v2/subscriptions/{subscriptionCode}/deploymentmodes:
+    parameters: [{ $ref: "#/components/parameters/SubscriptionCode" }]
+    get:
+      tags: [deployment]
+      operationId: getDeploymentModes
+      responses:
+        {
+          "200":
+            {
+              description: Deployment modes by environment,
+              content:
+                {
+                  application/json:
+                    {
+                      schema:
+                        {
+                          type: array,
+                          items: { $ref: "#/components/schemas/DeploymentModesPerEnvironmentDTO" },
+                        },
+                    },
+                },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /v2/subscriptions/{subscriptionCode}/deployments:
+    parameters: [{ $ref: "#/components/parameters/SubscriptionCode" }]
+    get:
+      tags: [deployment]
+      operationId: getDeployments
+      parameters:
+        - { $ref: "#/components/parameters/Top" }
+        - { $ref: "#/components/parameters/Skip" }
+        - { $ref: "#/components/parameters/OrderBy" }
+        - { name: buildCode, in: query, schema: { type: string } }
+        - { name: environmentCode, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/DeploymentStatus" } }
+      responses:
+        {
+          "200":
+            {
+              description: Deployment collection,
+              content:
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/DeploymentDetailsDTO" } },
+                },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+    post:
+      tags: [deployment]
+      operationId: createDeployment
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/CreateDeploymentRequestDTO" } },
+            },
+        }
+      responses:
+        "201":
+          {
+            description: Deployment created,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/CreateDeploymentResponseDTO" } },
+              },
+          }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "412": { $ref: "#/components/responses/Problem" }
+        "423": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /v2/subscriptions/{subscriptionCode}/deployments/{deploymentCode}:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/DeploymentCode" },
+      ]
+    get:
+      tags: [deployment]
+      operationId: getDeployment
+      responses:
+        {
+          "200":
+            {
+              description: Deployment,
+              content:
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/DeploymentDetailDTO" } },
+                },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /v2/subscriptions/{subscriptionCode}/deployments/{deploymentCode}/progress:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/DeploymentCode" },
+      ]
+    get:
+      tags: [deployment]
+      operationId: getDeploymentProgress
+      responses:
+        {
+          "200":
+            {
+              description: Deployment progress,
+              content:
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/DeploymentProgressDTO" } },
+                },
+            },
+          "429": { $ref: "#/components/responses/Problem" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /v2/subscriptions/{subscriptionCode}/deployments/{deploymentCode}/decisions:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/DeploymentCode" },
+      ]
+    get:
+      tags: [deployment]
+      operationId: getDeploymentDecisions
+      responses:
+        {
+          "200":
+            { description: Decisions, content: { application/json: { schema: { type: object } } } },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+    post:
+      tags: [deployment]
+      operationId: createDeploymentDecision
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/CreateDeploymentDecisionRequestDTO" } },
+            },
+        }
+      responses:
+        {
+          "201":
+            {
+              description: Decision accepted,
+              content: { application/json: { schema: { type: object } } },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /v2/subscriptions/{subscriptionCode}/deployments/{deploymentCode}/cancellationoptions:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/DeploymentCode" },
+      ]
+    get:
+      tags: [deployment]
+      operationId: getDeploymentCancellationOptions
+      responses:
+        {
+          "200":
+            {
+              description: Cancellation options,
+              content: { application/json: { schema: { type: object } } },
+            },
+          "404": { $ref: "#/components/responses/Problem" },
+          "501": { $ref: "#/components/responses/Problem" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /v2/subscriptions/{subscriptionCode}/deployments/{deploymentCode}/cancellation:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/DeploymentCode" },
+      ]
+    post:
+      tags: [deployment]
+      operationId: createDeploymentCancellation
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/DeploymentCancellationRequestDTO" } },
+            },
+        }
+      responses:
+        {
+          "202": { description: Cancellation accepted },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /v2/subscriptions/{subscriptionCode}/deployments/{deploymentCode}/trafficsplit:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/DeploymentCode" },
+      ]
+    get:
+      tags: [deployment]
+      operationId: getTrafficSplit
+      responses:
+        {
+          "200":
+            {
+              description: Traffic split,
+              content:
+                { application/json: { schema: { $ref: "#/components/schemas/TrafficSplitDTO" } } },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+    put:
+      tags: [deployment]
+      operationId: updateTrafficSplit
+      requestBody:
+        {
+          required: true,
+          content:
+            { application/json: { schema: { $ref: "#/components/schemas/TrafficSplitDTO" } } },
+        }
+      responses:
+        {
+          "201":
+            {
+              description: Traffic split updated,
+              content:
+                { application/json: { schema: { $ref: "#/components/schemas/TrafficSplitDTO" } } },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /v2/subscriptions/{subscriptionCode}/deployments/{deploymentCode}/trafficsplit/history:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/DeploymentCode" },
+      ]
+    get:
+      tags: [deployment]
+      operationId: getTrafficSplitHistory
+      responses:
+        {
+          "200":
+            {
+              description: Traffic split history,
+              content:
+                { application/json: { schema: { $ref: "#/components/schemas/ListEnvelope" } } },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /v2/subscriptions/{subscriptionCode}/environments:
+    parameters: [{ $ref: "#/components/parameters/SubscriptionCode" }]
+    get:
+      tags: [environment]
+      operationId: getEnvironments
+      responses:
+        {
+          "200":
+            {
+              description: Environments,
+              content:
+                { application/json: { schema: { $ref: "#/components/schemas/ListEnvelope" } } },
+            },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/endpoints:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+      ]
+    get:
+      {
+        tags: [endpoint],
+        operationId: getEndpoints,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/List" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    post:
+      tags: [endpoint]
+      operationId: createEndpoint
+      requestBody:
+        {
+          required: true,
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/CreateEndpointRequestDTO" } },
+            },
+        }
+      responses:
+        {
+          "201": { $ref: "#/components/responses/Object" },
+          default: { $ref: "#/components/responses/Problem" },
+        }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/endpoints/{endpointCode}:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+        { $ref: "#/components/parameters/EndpointCode" },
+      ]
+    get:
+      {
+        tags: [endpoint],
+        operationId: getEndpoint,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    patch:
+      {
+        tags: [endpoint],
+        operationId: updateEndpoint,
+        requestBody: { $ref: "#/components/requestBodies/Object" },
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    delete:
+      {
+        tags: [endpoint],
+        operationId: deleteEndpoint,
+        responses:
+          {
+            "204": { description: Endpoint deleted },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/databackups:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+      ]
+    get:
+      {
+        tags: [databackup],
+        operationId: getDatabackups,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/List" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    post:
+      {
+        tags: [databackup],
+        operationId: createDatabackup,
+        requestBody: { $ref: "#/components/requestBodies/Object" },
+        responses:
+          {
+            "201": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/databackups/{databackupCode}:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+        { $ref: "#/components/parameters/DatabackupCode" },
+      ]
+    get:
+      {
+        tags: [databackup],
+        operationId: getDatabackup,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    delete:
+      {
+        tags: [databackup],
+        operationId: deleteDatabackup,
+        responses:
+          {
+            "204": { description: Backup deleted },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/databackups/{databackupCode}/state:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+        { $ref: "#/components/parameters/DatabackupCode" },
+      ]
+    put:
+      {
+        tags: [databackup],
+        operationId: changeDatabackupState,
+        requestBody: { $ref: "#/components/requestBodies/Object" },
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/datarestores:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+      ]
+    get:
+      {
+        tags: [databackup],
+        operationId: getDatarestores,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/List" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    post:
+      {
+        tags: [databackup],
+        operationId: createDatarestore,
+        requestBody: { $ref: "#/components/requestBodies/Object" },
+        responses:
+          {
+            "201": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/datarestores/{datarestoreCode}:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+        { $ref: "#/components/parameters/DatarestoreCode" },
+      ]
+    get:
+      {
+        tags: [databackup],
+        operationId: getDatarestore,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/datarestores/{datarestoreCode}/state:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+        { $ref: "#/components/parameters/DatarestoreCode" },
+      ]
+    put:
+      {
+        tags: [databackup],
+        operationId: changeDatarestoreState,
+        requestBody: { $ref: "#/components/requestBodies/Object" },
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/scaling:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+      ]
+    get:
+      {
+        tags: [scaling],
+        operationId: getEnvironmentScalingDetail,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    patch:
+      {
+        tags: [scaling],
+        operationId: updateEnvironmentScalingDetail,
+        requestBody: { $ref: "#/components/requestBodies/Object" },
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/scalingOptions:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+      ]
+    get:
+      {
+        tags: [scaling],
+        operationId: getEnvironmentScalingOption,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/scheduledactivities:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+      ]
+    get:
+      {
+        tags: [scheduledActivity],
+        operationId: getScheduledActivities,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/List" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    post:
+      {
+        tags: [scheduledActivity],
+        operationId: createScheduledActivity,
+        requestBody: { $ref: "#/components/requestBodies/Object" },
+        responses:
+          {
+            "201": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/scheduledactivities/{activityCode}:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+        { $ref: "#/components/parameters/ActivityCode" },
+      ]
+    get:
+      {
+        tags: [scheduledActivity],
+        operationId: getScheduledActivity,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    patch:
+      {
+        tags: [scheduledActivity],
+        operationId: updateScheduledActivity,
+        requestBody: { $ref: "#/components/requestBodies/Object" },
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/scheduledactivities/{activityCode}/cancel:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+        { $ref: "#/components/parameters/ActivityCode" },
+      ]
+    post:
+      {
+        tags: [scheduledActivity],
+        operationId: cancelScheduledActivity,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/services/{serviceCode}/properties/{propertyCode}:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/EnvironmentCode" },
+        { $ref: "#/components/parameters/ServiceCode" },
+        { $ref: "#/components/parameters/PropertyCode" },
+      ]
+    get:
+      {
+        tags: [serviceProperties],
+        operationId: getProperty,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            "403": { $ref: "#/components/responses/Problem" },
+            "404": { $ref: "#/components/responses/Problem" },
+          },
+      }
+    put:
+      {
+        tags: [serviceProperties],
+        operationId: putProperty,
+        requestBody: { $ref: "#/components/requestBodies/Object" },
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/certificates:
+    parameters: [{ $ref: "#/components/parameters/SubscriptionCode" }]
+    get:
+      {
+        tags: [certificate],
+        operationId: getCertificates,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/List" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    post:
+      {
+        tags: [certificate],
+        operationId: createCertificate,
+        requestBody: { $ref: "#/components/requestBodies/Object" },
+        responses:
+          {
+            "201": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/certificates/{certificateCode}:
+    parameters:
+      [
+        { $ref: "#/components/parameters/SubscriptionCode" },
+        { $ref: "#/components/parameters/CertificateCode" },
+      ]
+    get:
+      {
+        tags: [certificate],
+        operationId: getCertificateDetails,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    delete:
+      {
+        tags: [certificate],
+        operationId: deleteCertificate,
+        responses:
+          {
+            "204": { description: Certificate deleted },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/roles:
+    parameters: [{ $ref: "#/components/parameters/SubscriptionCode" }]
+    get:
+      {
+        tags: [userRoleAssignment],
+        operationId: getAllRolesForSubscription,
+        responses:
+          {
+            "200":
+              {
+                description: Roles,
+                content: { application/json: { schema: { type: array, items: { type: object } } } },
+              },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+  /v2/subscriptions/{subscriptionCode}/userroleassignments:
+    parameters: [{ $ref: "#/components/parameters/SubscriptionCode" }]
+    get:
+      {
+        tags: [userRoleAssignment],
+        operationId: getAllUserRoleAssignments,
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    post:
+      {
+        tags: [userRoleAssignment],
+        operationId: createUserRoleAssignment,
+        requestBody: { $ref: "#/components/requestBodies/Object" },
+        responses:
+          {
+            "201": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    patch:
+      {
+        tags: [userRoleAssignment],
+        operationId: updateUserRoleAssignment,
+        requestBody: { $ref: "#/components/requestBodies/Object" },
+        responses:
+          {
+            "200": { $ref: "#/components/responses/Object" },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+    delete:
+      {
+        tags: [userRoleAssignment],
+        operationId: deleteUserRoleAssignment,
+        requestBody: { $ref: "#/components/requestBodies/Object" },
+        responses:
+          {
+            "204": { description: Role assignment deleted },
+            default: { $ref: "#/components/responses/Problem" },
+          },
+      }
+components:
+  securitySchemes:
+    SapBearer:
+      type: apiKey
+      in: header
+      name: x-approuter-authorization
+      description: "Bearer <synthetic RS256 access token>"
+  parameters:
+    SubscriptionCode:
+      { name: subscriptionCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+    EnvironmentCode:
+      { name: environmentCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+    BuildCode:
+      { name: buildCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+    DeploymentCode:
+      { name: deploymentCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+    EndpointCode:
+      { name: endpointCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+    DatabackupCode:
+      { name: databackupCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+    DatarestoreCode:
+      { name: datarestoreCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+    ActivityCode:
+      { name: activityCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+    ServiceCode:
+      { name: serviceCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+    PropertyCode:
+      { name: propertyCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+    CertificateCode:
+      { name: certificateCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+    Top:
+      { name: "$top", in: query, schema: { type: integer, minimum: 0, maximum: 100, default: 100 } }
+    Skip: { name: "$skip", in: query, schema: { type: integer, minimum: 0, default: 0 } }
+    OrderBy: { name: "$orderby", in: query, schema: { type: string } }
+    Count: { name: "$count", in: query, schema: { type: boolean } }
+  requestBodies:
+    Object:
+      {
+        required: true,
+        content: { application/json: { schema: { type: object, additionalProperties: true } } },
+      }
+  responses:
+    Object:
+      {
+        description: Resource,
+        content: { application/json: { schema: { type: object, additionalProperties: true } } },
+      }
+    List:
+      {
+        description: Resource list,
+        content: { application/json: { schema: { $ref: "#/components/schemas/ListEnvelope" } } },
+      }
+    Problem:
+      description: API problem
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/ErrorDTO" } } }
+  schemas:
+    ErrorDTO:
+      type: object
+      required: [title, detail]
+      properties: { title: { type: string }, detail: { type: string } }
+    ListEnvelope:
+      type: object
+      required: [value, count]
+      properties: { value: { type: array, items: {} }, count: { type: integer, minimum: 0 } }
+    BuildStatus: { type: string, enum: [SCHEDULED, BUILDING, SUCCESS, FAIL, DELETED, UNKNOWN] }
+    DeploymentStatus: { type: string, enum: [SCHEDULED, DEPLOYING, DEPLOYED, UNDEPLOYED, FAIL] }
+    CreateBuildRequestDTO:
+      type: object
+      additionalProperties: false
+      required: [branch, name]
+      properties:
+        { branch: { type: string }, name: { type: string }, applicationCode: { type: string } }
+    CreateBuildResponseDTO:
+      type: object
+      required: [code, subscriptionCode]
+      properties: { code: { type: string }, subscriptionCode: { type: string } }
+    BuildDetailDTO:
+      type: object
+      required:
+        [
+          subscriptionCode,
+          branch,
+          name,
+          code,
+          buildVersion,
+          createdBy,
+          status,
+          isPreview,
+          hasSnapshot,
+          deployed,
+          properties,
+        ]
+      properties:
+        subscriptionCode: { type: string }
+        applicationCode: { type: string }
+        branch: { type: string }
+        name: { type: string }
+        code: { type: string }
+        buildStartTimestamp: { type: string, format: date-time }
+        buildEndTimestamp: { type: string, format: date-time }
+        buildVersion: { type: string }
+        createdBy: { type: string }
+        status: { $ref: "#/components/schemas/BuildStatus" }
+        isPreview: { type: boolean }
+        hasSnapshot: { type: boolean }
+        deployed: { type: boolean }
+        properties: { type: array, items: { type: object } }
+    BuildDetailsDTO:
+      type: object
+      required: [value, count]
+      properties:
+        {
+          value: { type: array, items: { $ref: "#/components/schemas/BuildDetailDTO" } },
+          count: { type: integer },
+        }
+    BuildProgressDTO:
+      type: object
+      required: [subscriptionCode, buildCode, numberOfTasks, percentage, buildStatus, startedTasks]
+      properties:
+        subscriptionCode: { type: string }
+        buildCode: { type: string }
+        errorMessage: { type: string }
+        numberOfTasks: { type: integer }
+        percentage: { type: integer, minimum: 0, maximum: 100 }
+        buildStatus: { $ref: "#/components/schemas/BuildStatus" }
+        startedTasks: { type: array, items: { type: object } }
+    DeploymentModesPerEnvironmentDTO:
+      type: object
+      properties: { environmentCode: { type: string }, deploymentModes: { type: object } }
+    CreateDeploymentRequestDTO:
+      type: object
+      additionalProperties: false
+      required: [buildCode, environmentCode, databaseUpdateMode, strategy]
+      properties:
+        buildCode: { type: string }
+        environmentCode: { type: string }
+        databaseUpdateMode: { type: string, enum: [NONE, UPDATE, INITIALIZE] }
+        strategy: { type: string, enum: [ROLLING_UPDATE, RECREATE, GREEN] }
+    CreateDeploymentResponseDTO:
+      type: object
+      required: [code, subscriptionCode]
+      properties: { code: { type: string }, subscriptionCode: { type: string } }
+    DeploymentDetailDTO:
+      type: object
+      required:
+        [code, subscriptionCode, buildCode, environmentCode, databaseUpdateMode, strategy, status]
+      properties:
+        code: { type: string }
+        subscriptionCode: { type: string }
+        buildCode: { type: string }
+        environmentCode: { type: string }
+        databaseUpdateMode: { type: string, enum: [NONE, UPDATE, INITIALIZE] }
+        strategy: { type: string, enum: [ROLLING_UPDATE, RECREATE, GREEN] }
+        status: { $ref: "#/components/schemas/DeploymentStatus" }
+        trafficSplit: { $ref: "#/components/schemas/TrafficSplitDTO" }
+    DeploymentDetailsDTO:
+      type: object
+      required: [value, count]
+      properties:
+        {
+          value: { type: array, items: { $ref: "#/components/schemas/DeploymentDetailDTO" } },
+          count: { type: integer },
+        }
+    DeploymentProgressDTO:
+      type: object
+      required: [subscriptionCode, deploymentCode, deploymentStatus, percentage, stages]
+      properties:
+        subscriptionCode: { type: string }
+        deploymentCode: { type: string }
+        deploymentStatus: { $ref: "#/components/schemas/DeploymentStatus" }
+        percentage: { type: integer, minimum: 0, maximum: 100 }
+        stages: { type: array, items: { type: object } }
+    CreateDeploymentDecisionRequestDTO:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      properties:
+        {
+          reason: { type: string },
+          decision: { type: string, enum: [ACCEPT, PREPARE_CANARY, REJECT] },
+        }
+    DeploymentCancellationRequestDTO:
+      type: object
+      additionalProperties: false
+      properties: { rollbackDatabase: { type: boolean }, cancelReason: { type: string } }
+    TrafficSplitDTO:
+      type: object
+      properties:
+        services: { type: array, items: { $ref: "#/components/schemas/TrafficPercentageDTO" } }
+        endpoints: { type: array, items: { $ref: "#/components/schemas/TrafficPercentageDTO" } }
+    TrafficPercentageDTO:
+      type: object
+      required: [code, percentage]
+      properties:
+        {
+          code: { type: string },
+          percentage: { type: integer, minimum: 0, maximum: 100 },
+          name: { type: string },
+        }
+    CreateEndpointRequestDTO:
+      type: object
+      additionalProperties: false
+      required: [name, domainName, protocol, k8sService, k8sServiceVersion, access]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        domainName: { type: string }
+        protocol: { type: string, enum: [HTTP, HTTPS] }
+        k8sService: { type: string }
+        k8sServiceVersion: { type: string, enum: [BLUE, GREEN, UNSPECIFIED] }
+        access: { type: string, enum: [ALLOW_ALL, DENY_ALL] }

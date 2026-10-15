@@ -1,0 +1,252 @@
+openapi: 3.1.0
+info:
+  title: CommerceKit CCv2 Sandbox Control API
+  version: 1.0.0
+  description: Run lifecycle, scenario configuration, and synthetic OAuth support.
+servers:
+  - url: https://ccv2.sandbox.commercekit.tools
+paths:
+  /__mock/runs:
+    post:
+      operationId: createRun
+      security: []
+      responses:
+        "201":
+          description: Run and one-time credentials
+          content: { application/json: { schema: { $ref: "#/components/schemas/CreatedRun" } } }
+        "429": { $ref: "#/components/responses/MockError" }
+  /__mock/runs/{runId}:
+    parameters: [{ $ref: "#/components/parameters/RunId" }]
+    get:
+      operationId: getRun
+      security: [{ RunControl: [] }]
+      responses:
+        {
+          "200": { $ref: "#/components/responses/Run" },
+          "401": { $ref: "#/components/responses/MockError" },
+          "403": { $ref: "#/components/responses/MockError" },
+          "404": { $ref: "#/components/responses/MockError" },
+        }
+    delete:
+      operationId: deleteRun
+      security: [{ RunControl: [] }]
+      responses:
+        {
+          "204": { description: Run storage deleted },
+          default: { $ref: "#/components/responses/MockError" },
+        }
+  /__mock/runs/{runId}/scenario:
+    parameters: [{ $ref: "#/components/parameters/RunId" }]
+    get:
+      operationId: getScenario
+      security: [{ RunControl: [] }]
+      responses:
+        {
+          "200": { $ref: "#/components/responses/Scenario" },
+          default: { $ref: "#/components/responses/MockError" },
+        }
+    put:
+      operationId: updateScenario
+      security: [{ RunControl: [] }]
+      requestBody:
+        {
+          required: true,
+          content: { application/json: { schema: { $ref: "#/components/schemas/Scenario" } } },
+        }
+      responses:
+        {
+          "200": { $ref: "#/components/responses/Scenario" },
+          "400": { $ref: "#/components/responses/MockError" },
+          default: { $ref: "#/components/responses/MockError" },
+        }
+  /__mock/runs/{runId}/state:
+    parameters: [{ $ref: "#/components/parameters/RunId" }]
+    get:
+      operationId: getRunState
+      security: [{ RunControl: [] }]
+      responses:
+        {
+          "200":
+            {
+              description: Sanitized run state,
+              content: { application/json: { schema: { type: object } } },
+            },
+          default: { $ref: "#/components/responses/MockError" },
+        }
+  /__mock/runs/{runId}/reset:
+    parameters: [{ $ref: "#/components/parameters/RunId" }]
+    post:
+      operationId: resetRun
+      security: [{ RunControl: [] }]
+      responses:
+        {
+          "200": { $ref: "#/components/responses/Run" },
+          default: { $ref: "#/components/responses/MockError" },
+        }
+  /oauth2/token:
+    post:
+      operationId: issueToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [client_id, client_secret, grant_type, resource]
+              properties:
+                client_id: { type: string }
+                client_secret: { type: string, format: password }
+                grant_type: { type: string, const: client_credentials }
+                resource: { type: string }
+      responses:
+        "200":
+          description: Synthetic access token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, token_type, expires_in]
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string, const: Bearer }
+                  expires_in: { type: integer, const: 3600 }
+        "400": { $ref: "#/components/responses/OAuthError" }
+        "401": { $ref: "#/components/responses/OAuthError" }
+  /.well-known/jwks.json:
+    get:
+      operationId: getJwks
+      security: []
+      responses:
+        "200":
+          {
+            description: RSA public keys,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        required: [keys],
+                        properties: { keys: { type: array, items: { type: object } } },
+                      },
+                  },
+              },
+          }
+components:
+  securitySchemes:
+    RunControl: { type: http, scheme: bearer, bearerFormat: opaque }
+  parameters:
+    RunId:
+      {
+        name: runId,
+        in: path,
+        required: true,
+        schema: { type: string, pattern: "^run_[0-9a-f]{32}$" },
+      }
+  responses:
+    MockError:
+      {
+        description: Control API error,
+        content: { application/json: { schema: { $ref: "#/components/schemas/MockError" } } },
+      }
+    OAuthError:
+      {
+        description: OAuth error,
+        content:
+          {
+            application/json:
+              {
+                schema:
+                  {
+                    type: object,
+                    required: [error],
+                    properties: { error: { type: string }, error_description: { type: string } },
+                  },
+              },
+          },
+      }
+    Run:
+      {
+        description: Run metadata,
+        content: { application/json: { schema: { $ref: "#/components/schemas/Run" } } },
+      }
+    Scenario:
+      {
+        description: Scenario,
+        content: { application/json: { schema: { $ref: "#/components/schemas/Scenario" } } },
+      }
+  schemas:
+    CreatedRun:
+      type: object
+      required: [runId, controlToken, expiresAt, credentials]
+      properties:
+        runId: { type: string }
+        controlToken: { type: string, writeOnly: true }
+        expiresAt: { type: string, format: date-time }
+        credentials:
+          type: object
+          required: [clientId, clientSecret, resource, tokenUrl]
+          properties:
+            clientId: { type: string }
+            clientSecret: { type: string, writeOnly: true }
+            resource: { type: string }
+            tokenUrl: { type: string, format: uri }
+    Run:
+      type: object
+      required: [runId, createdAt, expiresAt, schemaVersion, scenario]
+      properties:
+        runId: { type: string }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        schemaVersion: { type: integer }
+        scenario: { $ref: "#/components/schemas/Scenario" }
+    Scenario:
+      type: object
+      additionalProperties: false
+      required: [build, deployment, faults]
+      properties:
+        build:
+          type: object
+          additionalProperties: false
+          required: [outcome, pollsBeforeTerminal, logsAvailable]
+          properties:
+            outcome: { type: string, enum: [SUCCESS, FAIL, NEVER] }
+            pollsBeforeTerminal: { type: integer, minimum: 0, maximum: 100 }
+            logsAvailable: { type: boolean }
+            failureMessage: { type: string }
+        deployment:
+          type: object
+          additionalProperties: false
+          required: [outcome, pollsBeforeTerminal, cancellationAllowed, requireGreenDecision]
+          properties:
+            outcome: { type: string, enum: [DEPLOYED, FAIL, NEVER] }
+            pollsBeforeTerminal: { type: integer, minimum: 0, maximum: 100 }
+            failureMessage: { type: string }
+            cancellationAllowed: { type: boolean }
+            requireGreenDecision: { type: boolean }
+        faults:
+          type: array
+          maxItems: 25
+          items:
+            type: object
+            additionalProperties: false
+            required: [operationId, status, onCalls]
+            properties:
+              operationId: { type: string }
+              status: { type: integer, enum: [400, 401, 403, 404, 409, 412, 423, 429, 500] }
+              onCalls:
+                { type: array, minItems: 1, maxItems: 20, items: { type: integer, minimum: 1 } }
+              resourceIdentifier: { type: string }
+              retryAfterSeconds: { type: integer, minimum: 1 }
+              title: { type: string }
+              detail: { type: string }
+    MockError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties: { code: { type: string }, message: { type: string } }

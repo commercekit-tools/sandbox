@@ -41,7 +41,7 @@ describe("CORS", () => {
       "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     );
     expect(response.headers.get("Access-Control-Allow-Headers")).toBe(
-      "Authorization, Content-Type, x-mock-run-id, x-approuter-authorization",
+      "Authorization, Content-Type, x-mock-run-id, x-approuter-authorization, x-request-id",
     );
     expect(response.headers.get("Vary")).toContain("Origin");
   });

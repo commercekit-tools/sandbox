@@ -1,1 +1,6 @@
 ALLOWED_ORIGINS="https://commercekit.tools,http://localhost:3000"
+MOCK_JWT_ISSUER="http://localhost:8787"
+MOCK_JWT_PRIVATE_KEY="generate with pnpm --filter @commercekit/sandbox-ccv2 secrets:generate"
+MOCK_JWT_PUBLIC_JWK="generate with pnpm --filter @commercekit/sandbox-ccv2 secrets:generate"
+MOCK_JWT_KID="generate with pnpm --filter @commercekit/sandbox-ccv2 secrets:generate"
+RUN_TOKEN_SIGNING_KEY="generate with pnpm --filter @commercekit/sandbox-ccv2 secrets:generate"

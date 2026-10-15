@@ -28,8 +28,8 @@ The CCv2 Worker uses:
 - ESLint and Prettier for code quality
 
 API documentation, the service catalog, and the interactive playground will live on
-`commercekit.tools`. This repository does not contain a frontend. The planned production API
-hostname is `ccv2.sandbox.commercekit.tools`.
+`commercekit.tools`. This repository does not contain a frontend. The production API hostname is
+`ccv2.sandbox.commercekit.tools`.
 
 ## Requirements
 
@@ -49,11 +49,13 @@ Start the CCv2 Worker on `http://localhost:8787`:
 pnpm dev:ccv2
 ```
 
-Smoke-test the implemented routes:
+Generate local signing material, then smoke-test the implemented routes:
 
 ```bash
+pnpm --filter @commercekit/sandbox-ccv2 secrets:generate
 curl http://localhost:8787/
 curl http://localhost:8787/__mock/health
+curl http://localhost:8787/openapi.json
 ```
 
 The health route performs a real SQLite query through the Durable Object binding.
@@ -73,18 +75,18 @@ pnpm run ci
 `pnpm build:check` builds the Worker through a Wrangler deployment dry-run. It does not deploy or
 require Cloudflare credentials.
 
-GitHub Actions runs validation only. Production deployment will be configured separately through
-Cloudflare Workers Builds, with `apps/ccv2` as the root directory. Cloudflare will own runtime
-configuration, future secrets, and the custom domain.
+GitHub Actions runs validation only. Production deployment uses Cloudflare Workers Builds, with
+`apps/ccv2` as the root directory. Required runtime secrets and the pre-merge checklist are in
+[`apps/ccv2/docs/cloudflare-deployment.md`](apps/ccv2/docs/cloudflare-deployment.md).
 
 ## Current status
 
-The repository currently provides the project foundation, health and service-identification
-routes, strict CORS handling, SQLite-backed Durable Object persistence, local development, runtime
-tests, CI, and dependency maintenance.
-
-SAP authentication, CCv2 API contracts, build and deployment simulation, environment APIs, SCIM,
-and scenario management are planned for later phases and are not currently implemented.
+The CCv2 Worker implements isolated 24-hour runs, synthetic OAuth/JWT authentication,
+deterministic scenarios and faults, build and deployment lifecycles, green decisions,
+cancellation, and the ten families in the independently authored Management API 2.0.12 inventory.
+Both OpenAPI documents, contract checks, and full Worker-runtime integration tests are included.
+SCIM remains outside the verified Management API scope, so no unverified SCIM routes are
+advertised.
 
 ## License
 

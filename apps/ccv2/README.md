@@ -1,72 +1,145 @@
 # CommerceKit CCv2 Sandbox Worker
 
-This package contains the Cloudflare Worker foundation for the SAP Commerce Cloud CCv2 sandbox.
-It currently exposes service-identification and health endpoints and persists minimal run metadata
-in SQLite-backed Durable Objects. SAP API simulation will be added in later phases.
+This Cloudflare Worker provides isolated, deterministic simulations for the SAP
+Commerce Cloud Management API. It implements all 52 operations inventoried from
+the published 2.0.12 contract across builds, deployments, environments,
+endpoints, backups/restores, scaling, certificates, scheduled activities,
+service properties, and role assignments.
 
-## Setup
+The compatibility contract is independently authored. SAP's official
+documentation remains the authority:
+[Cloud Portal API](https://help.sap.com/docs/SAP_COMMERCE_CLOUD_PUBLIC_CLOUD/0fa6bcf4736c46f78c248512391eb467/66abfe678b55457fab235ce8039dda71.html?locale=en-US).
+
+## Local setup
 
 ```bash
 cd /Users/anil/projects/sandbox
 corepack enable
 pnpm install
+pnpm --filter @commercekit/sandbox-ccv2 secrets:generate
 pnpm dev:ccv2
 ```
 
-The Worker listens on `http://localhost:8787`.
+The key generator creates an ignored `apps/ccv2/.dev.vars` with mode `0600`.
+It refuses to rotate an existing file implicitly. The Worker listens on
+`http://localhost:8787`. Exact local browser origins can be edited in
+`ALLOWED_ORIGINS`; CORS is not authentication.
+
+## Complete curl flow
+
+The examples use `jq` and synthetic credentials created by the sandbox.
 
 ```bash
-curl http://localhost:8787/
-curl http://localhost:8787/__mock/health
+BASE_URL="http://localhost:8787"
+
+# 1. Create a 24-hour run.
+RUN_JSON="$(curl --fail --silent --show-error -X POST "$BASE_URL/__mock/runs")"
+RUN_ID="$(jq -r .runId <<<"$RUN_JSON")"
+CONTROL_TOKEN="$(jq -r .controlToken <<<"$RUN_JSON")"
+CLIENT_ID="$(jq -r .credentials.clientId <<<"$RUN_JSON")"
+CLIENT_SECRET="$(jq -r .credentials.clientSecret <<<"$RUN_JSON")"
+RESOURCE="$(jq -r .credentials.resource <<<"$RUN_JSON")"
+
+# 2. Obtain a synthetic OAuth token.
+TOKEN_JSON="$(curl --fail --silent --show-error -X POST "$BASE_URL/oauth2/token" \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode "client_id=$CLIENT_ID" \
+  --data-urlencode "client_secret=$CLIENT_SECRET" \
+  --data-urlencode 'grant_type=client_credentials' \
+  --data-urlencode "resource=$RESOURCE")"
+ACCESS_TOKEN="$(jq -r .access_token <<<"$TOKEN_JSON")"
+
+# 3. Configure successful build and deployment behavior.
+curl --fail --silent --show-error -X PUT "$BASE_URL/__mock/runs/$RUN_ID/scenario" \
+  -H "Authorization: Bearer $CONTROL_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{
+    "build":{"outcome":"SUCCESS","pollsBeforeTerminal":2,"logsAvailable":true},
+    "deployment":{"outcome":"DEPLOYED","pollsBeforeTerminal":2,"cancellationAllowed":true,"requireGreenDecision":false},
+    "faults":[]
+  }'
+
+# 4. Create a build.
+BUILD_JSON="$(curl --fail --silent --show-error -X POST \
+  "$BASE_URL/v2/subscriptions/SUBSCRIPTION_001/builds" \
+  -H "x-approuter-authorization: Bearer $ACCESS_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"branch":"main","name":"sandbox-release","applicationCode":"commerce"}')"
+BUILD_CODE="$(jq -r .code <<<"$BUILD_JSON")"
+
+# 5. Poll three times: BUILDING, BUILDING, SUCCESS.
+for _ in 1 2 3; do
+  curl --fail --silent --show-error \
+    "$BASE_URL/v2/subscriptions/SUBSCRIPTION_001/builds/$BUILD_CODE/progress" \
+    -H "x-approuter-authorization: Bearer $ACCESS_TOKEN" | jq .
+done
+
+# 6. Download a valid ZIP log archive.
+curl --fail --silent --show-error \
+  "$BASE_URL/v2/subscriptions/SUBSCRIPTION_001/builds/$BUILD_CODE/logs" \
+  -H "x-approuter-authorization: Bearer $ACCESS_TOKEN" \
+  --output "$BUILD_CODE-logs.zip"
+
+# 7. Create a deployment.
+DEPLOYMENT_JSON="$(curl --fail --silent --show-error -X POST \
+  "$BASE_URL/v2/subscriptions/SUBSCRIPTION_001/deployments" \
+  -H "x-approuter-authorization: Bearer $ACCESS_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data "{\"buildCode\":\"$BUILD_CODE\",\"environmentCode\":\"d1\",\"databaseUpdateMode\":\"UPDATE\",\"strategy\":\"ROLLING_UPDATE\"}")"
+DEPLOYMENT_CODE="$(jq -r .code <<<"$DEPLOYMENT_JSON")"
+
+# 8. Poll three times: DEPLOYING, DEPLOYING, DEPLOYED.
+for _ in 1 2 3; do
+  curl --fail --silent --show-error \
+    "$BASE_URL/v2/subscriptions/SUBSCRIPTION_001/deployments/$DEPLOYMENT_CODE/progress" \
+    -H "x-approuter-authorization: Bearer $ACCESS_TOKEN" | jq .
+done
+
+# 9. Inspect sanitized state; credentials and their verifiers are excluded.
+curl --fail --silent --show-error "$BASE_URL/__mock/runs/$RUN_ID/state" \
+  -H "Authorization: Bearer $CONTROL_TOKEN" | jq .
+
+# 10. Delete the run and all retained state.
+curl --fail --silent --show-error -X DELETE "$BASE_URL/__mock/runs/$RUN_ID" \
+  -H "Authorization: Bearer $CONTROL_TOKEN"
 ```
 
-The health request invokes a fixed internal `Ccv2Run` instance and executes a real SQLite query.
-There is no public endpoint for arbitrary Durable Object state.
+Never put real SAP credentials into this public sandbox.
 
-To add local browser origins, copy `.dev.vars.example` to `.dev.vars` and update the comma-separated
-`ALLOWED_ORIGINS` value. Origin matching is exact.
+## Behavior and limits
 
-## Commands
+- Runs expire after 24 hours through Durable Object alarms.
+- Scenario behavior is snapshotted when a build or deployment is created.
+- Only progress endpoints advance lifecycle state.
+- `pollsBeforeTerminal = N` yields N nonterminal responses and terminal state on N+1.
+- `NEVER` stays `BUILDING` or `DEPLOYING`.
+- Green deployments support decisions, canary preparation, and traffic splits.
+- Reset clears resources, counters, and scenario configuration while preserving credentials and expiry.
+- Vendor errors use `application/problem+json`; control errors use the documented mock envelope.
 
-Run repository checks from `/Users/anil/projects/sandbox`:
+See [architecture](docs/architecture.md), [authentication](docs/authentication.md),
+[scenarios](docs/scenarios.md), [API coverage](docs/api-coverage.md), and
+[deployment readiness](docs/cloudflare-deployment.md).
+
+## Contracts and validation
+
+- Management API: `GET /openapi.json`
+- Mock-control API: `GET /openapi/mock.json`
+- JWKS: `GET /.well-known/jwks.json`
+- Health: `GET /__mock/health`
 
 ```bash
+pnpm types:ccv2
 pnpm lint
+pnpm format:check
 pnpm typecheck
 pnpm test
+pnpm --filter @commercekit/sandbox-ccv2 openapi:check
 pnpm build:check
 pnpm run ci
 ```
 
-Application-local commands are also available:
-
-```bash
-cd /Users/anil/projects/sandbox/apps/ccv2
-pnpm dev
-pnpm typecheck
-pnpm test
-pnpm build:check
-pnpm exec wrangler deploy --dry-run
-```
-
-Regenerate committed Worker runtime and binding types after changing `wrangler.jsonc`:
-
-```bash
-pnpm types:ccv2
-```
-
-## Deployment model
-
-GitHub Actions validates pull requests and `main`; it does not deploy. Production deployment and
-the `ccv2.sandbox.commercekit.tools` Custom Domain will be configured through Cloudflare Workers
-Builds after this foundation is accepted.
-
-Planned Workers Builds settings:
-
-```text
-Root directory: apps/ccv2
-Build command: pnpm run build:check
-Deploy command: pnpm exec wrangler deploy
-```
-
-No Cloudflare credentials or runtime secrets are required for local validation.
+Tests run in Cloudflare's Workers runtime with SQLite Durable Objects and
+ephemeral test signing material. `pnpm build:check` is a Wrangler dry run and
+does not deploy. GitHub Actions validates only; Cloudflare Workers Builds deploys
+commits merged to `main`.

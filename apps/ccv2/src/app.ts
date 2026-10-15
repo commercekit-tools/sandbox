@@ -1,13 +1,22 @@
 import { Hono } from "hono";
 
+import { sapAuthentication } from "./auth/middleware";
+import { bodyLimitMiddleware } from "./middleware/body-limit";
 import { corsMiddleware } from "./middleware/cors";
+import { buildRoutes } from "./routes/builds";
+import { deploymentRoutes } from "./routes/deployments";
+import { extendedRoutes } from "./routes/extended";
 import { healthRoutes } from "./routes/health";
+import { mockControlRoutes } from "./routes/mock-control";
+import { oauthRoutes } from "./routes/oauth";
+import { openapiRoutes } from "./routes/openapi";
 import type { AppEnvironment } from "./types";
 
 export function createApp(): Hono<AppEnvironment> {
   const app = new Hono<AppEnvironment>();
 
   app.use("*", corsMiddleware);
+  app.use("*", bodyLimitMiddleware);
 
   app.get("/", (context) => {
     context.header("Cache-Control", "no-store");
@@ -33,6 +42,13 @@ export function createApp(): Hono<AppEnvironment> {
   });
 
   app.route("/", healthRoutes);
+  app.route("/", oauthRoutes);
+  app.route("/", mockControlRoutes);
+  app.route("/", openapiRoutes);
+  app.use("/v2/*", sapAuthentication);
+  app.route("/", buildRoutes);
+  app.route("/", deploymentRoutes);
+  app.route("/", extendedRoutes);
 
   app.notFound((context) => {
     context.header("Cache-Control", "no-store");
