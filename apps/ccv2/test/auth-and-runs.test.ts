@@ -13,7 +13,7 @@ describe("run control and synthetic OAuth", () => {
     expect(first.runId).not.toBe(second.runId);
     expect(first.controlToken).not.toBe(second.controlToken);
     expect(first.credentials.clientSecret).not.toBe(second.credentials.clientSecret);
-    expect(first.credentials.tokenUrl).toBe("https://ccv2.sandbox.commercekit.tools/oauth2/token");
+    expect(first.credentials.tokenUrl).toBe(`${env.MOCK_JWT_ISSUER}/oauth2/token`);
 
     const unauthorized = await worker.default.fetch(
       `https://example.com/sandbox/v1/runs/${first.runId}`,
@@ -111,7 +111,7 @@ describe("run control and synthetic OAuth", () => {
     if (!publicJwk) throw new Error("JWKS did not contain a public key");
     const key = await importJWK(publicJwk, "RS256");
     const verified = await jwtVerify(token, key, {
-      issuer: "https://ccv2.sandbox.commercekit.tools",
+      issuer: env.MOCK_JWT_ISSUER,
       audience: run.credentials.resource,
     });
     expect(verified.payload).toMatchObject({ run_id: run.runId, sub: run.runId });
