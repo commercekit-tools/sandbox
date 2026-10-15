@@ -15,6 +15,8 @@
     "typecheck": "tsc --project tsconfig.json && tsc --project test/tsconfig.json",
     "test": "vitest run",
     "openapi:check": "node scripts/validate-openapi.js",
+    "secrets:generate": "node scripts/generate-dev-secrets.js",
+    "secrets:generate-production": "node scripts/generate-signing-material.js",
     "build:check": "wrangler deploy --dry-run --outdir .wrangler/build"
   },
   "dependencies": {
