@@ -7,7 +7,18 @@ import type {
   BuildProgress,
   CreateBuildRequest,
 } from "../domain/build";
-import { SUBSCRIPTION_CODE } from "../domain/fixtures";
+import type {
+  CreateDeploymentRequest,
+  DeploymentCancellationRequest,
+  DeploymentDecisionRequest,
+  DeploymentDetail,
+  DeploymentListOptions,
+  DeploymentProgress,
+  TrafficSplit,
+  TrafficSplitHistoryEntry,
+  TrafficSplitRequest,
+} from "../domain/deployment";
+import { environmentExists, ENVIRONMENTS, SUBSCRIPTION_CODE } from "../domain/fixtures";
 import type {
   OperationFault,
   RunInitialization,
@@ -70,6 +81,25 @@ interface BuildRow {
   state_json: string;
   scenario_json: string;
   poll_count: number;
+  created_at: string;
+}
+
+interface DeploymentRow {
+  [column: string]: SqlStorageValue;
+  code: string;
+  subscription_code: string;
+  environment_code: string;
+  build_code: string;
+  state_json: string;
+  scenario_json: string;
+  poll_count: number;
+  created_at: string;
+}
+
+interface ResourceRow {
+  [column: string]: SqlStorageValue;
+  code: string;
+  state_json: string;
   created_at: string;
 }
 
@@ -468,6 +498,498 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
     return { ok: true, value: null };
   }
 
+  getDeploymentModes(subscriptionCode: string): RunResult<
+    {
+      environmentCode: string;
+      deploymentModes: { dataMigrationMode: string[]; deploymentMode: string[] };
+    }[]
+  > {
+    type Value = {
+      environmentCode: string;
+      deploymentModes: { dataMigrationMode: string[]; deploymentMode: string[] };
+    }[];
+    const subscriptionError = this.checkSubscription<Value>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<Value>("getDeploymentModes");
+    if (fault) return fault;
+    return {
+      ok: true,
+      value: ENVIRONMENTS.map(({ code }) => ({
+        environmentCode: code,
+        deploymentModes: {
+          dataMigrationMode: ["NONE", "UPDATE", "INITIALIZE"],
+          deploymentMode: ["ROLLING_UPDATE", "RECREATE", "GREEN"],
+        },
+      })),
+    };
+  }
+
+  createDeployment(
+    subscriptionCode: string,
+    request: CreateDeploymentRequest,
+  ): RunResult<{ code: string; subscriptionCode: string }> {
+    const subscriptionError = this.checkSubscription<{
+      code: string;
+      subscriptionCode: string;
+    }>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<{ code: string; subscriptionCode: string }>(
+      "createDeployment",
+      request.environmentCode,
+    );
+    if (fault) return fault;
+    if (!environmentExists(request.environmentCode)) {
+      return this.failure(404, "environment_not_found", "The environment was not found.");
+    }
+    const buildRow = this.buildRow(subscriptionCode, request.buildCode);
+    if (!buildRow || this.buildDetail(buildRow).status === "DELETED") {
+      return this.failure(404, "build_not_found", "The build was not found.");
+    }
+    if (this.buildDetail(buildRow).status !== "SUCCESS") {
+      return this.failure(412, "build_not_eligible", "Only a successful build can be deployed.");
+    }
+    const deployments = this.deploymentRows(subscriptionCode);
+    if (
+      deployments.some((row) => {
+        const detail = this.deploymentDetail(row);
+        return (
+          detail.environmentCode === request.environmentCode &&
+          (detail.status === "SCHEDULED" || detail.status === "DEPLOYING")
+        );
+      })
+    ) {
+      return this.failure(409, "deployment_conflict", "The environment has an active deployment.");
+    }
+    if (deployments.length >= 100) {
+      return this.failure(
+        429,
+        "deployment_quota_exceeded",
+        "This run already contains 100 deployments.",
+      );
+    }
+    const code = `deployment_${String(deployments.length + 1).padStart(6, "0")}`;
+    const now = new Date().toISOString();
+    const previous = deployments
+      .map((row) => this.deploymentDetail(row))
+      .reverse()
+      .find(
+        (candidate) =>
+          candidate.environmentCode === request.environmentCode && candidate.status === "DEPLOYED",
+      );
+    const detail: DeploymentDetail = {
+      code,
+      subscriptionCode,
+      createdBy: "sandbox-technical-user",
+      createdTimestamp: now,
+      buildCode: request.buildCode,
+      environmentCode: request.environmentCode,
+      databaseUpdateMode: request.databaseUpdateMode,
+      strategy: request.strategy,
+      scheduledTimestamp: now,
+      status: "SCHEDULED",
+      isCanaryAvailable: request.strategy === "GREEN",
+      trafficSplit: this.defaultTrafficSplit(request.strategy),
+      decisions: [],
+      awaitingDecision: false,
+    };
+    if (previous) detail.previousDeploymentCode = previous.code;
+    if (request.strategy === "GREEN") {
+      detail.expireAtTimestamp = new Date(Date.now() + 60 * 60 * 1_000).toISOString();
+    }
+    this.ctx.storage.sql.exec(
+      `INSERT INTO deployments
+        (code, subscription_code, environment_code, build_code, state_json, scenario_json, poll_count, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+      code,
+      subscriptionCode,
+      request.environmentCode,
+      request.buildCode,
+      JSON.stringify(detail),
+      JSON.stringify(this.scenario().deployment),
+      now,
+    );
+    this.recordEvent("deployment.created", "createDeployment", code, 201);
+    console.log(
+      JSON.stringify({
+        event: "ccv2.deployment.created",
+        runId: this.metadataRow()?.run_id,
+        operationId: "createDeployment",
+        resourceId: code,
+        status: 201,
+      }),
+    );
+    return { ok: true, value: { code, subscriptionCode } };
+  }
+
+  listDeployments(
+    subscriptionCode: string,
+    options: DeploymentListOptions,
+  ): RunResult<{ value: DeploymentDetail[]; count: number }> {
+    const subscriptionError = this.checkSubscription<{
+      value: DeploymentDetail[];
+      count: number;
+    }>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<{ value: DeploymentDetail[]; count: number }>("getDeployments");
+    if (fault) return fault;
+    let details = this.deploymentRows(subscriptionCode).map((row) => this.deploymentDetail(row));
+    if (options.buildCode)
+      details = details.filter(({ buildCode }) => buildCode === options.buildCode);
+    if (options.environmentCode) {
+      details = details.filter(
+        ({ environmentCode }) => environmentCode === options.environmentCode,
+      );
+    }
+    if (options.status) details = details.filter(({ status }) => status === options.status);
+    if (options.orderDescending) details.reverse();
+    return {
+      ok: true,
+      value: {
+        value: details.slice(options.skip, options.skip + options.top),
+        count: details.length,
+      },
+    };
+  }
+
+  getDeployment(subscriptionCode: string, deploymentCode: string): RunResult<DeploymentDetail> {
+    const subscriptionError = this.checkSubscription<DeploymentDetail>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<DeploymentDetail>("getDeployment", deploymentCode);
+    if (fault) return fault;
+    const row = this.deploymentRow(subscriptionCode, deploymentCode);
+    if (!row) return this.failure(404, "deployment_not_found", "The deployment was not found.");
+    return { ok: true, value: this.deploymentDetail(row) };
+  }
+
+  getDeploymentProgress(
+    subscriptionCode: string,
+    deploymentCode: string,
+  ): RunResult<DeploymentProgress> {
+    const subscriptionError = this.checkSubscription<DeploymentProgress>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<DeploymentProgress>("getDeploymentProgress", deploymentCode);
+    if (fault) return fault;
+    const row = this.deploymentRow(subscriptionCode, deploymentCode);
+    if (!row) return this.failure(404, "deployment_not_found", "The deployment was not found.");
+    const detail = this.deploymentDetail(row);
+    const snapshot = JSON.parse(row.scenario_json) as Scenario["deployment"];
+    let pollCount = row.poll_count;
+    const isTerminal = ["DEPLOYED", "UNDEPLOYED", "FAIL"].includes(detail.status);
+    if (!isTerminal && !detail.awaitingDecision) {
+      pollCount += 1;
+      const now = new Date().toISOString();
+      if (snapshot.outcome !== "NEVER" && pollCount > snapshot.pollsBeforeTerminal) {
+        if (detail.strategy === "GREEN" && snapshot.requireGreenDecision) {
+          detail.status = "DEPLOYING";
+          detail.awaitingDecision = true;
+          detail.canaryStatus = "STARTED";
+        } else {
+          this.applyDeploymentTerminal(detail, snapshot.outcome, now);
+        }
+      } else {
+        detail.status = "DEPLOYING";
+      }
+      this.saveDeployment(detail, pollCount);
+    }
+    const terminal = ["DEPLOYED", "UNDEPLOYED", "FAIL"].includes(detail.status);
+    const percentage = terminal
+      ? 100
+      : detail.awaitingDecision
+        ? 90
+        : Math.min(90, Math.floor((pollCount / (snapshot.pollsBeforeTerminal + 1)) * 100));
+    const startTimestamp = detail.createdTimestamp;
+    const endTimestamp =
+      detail.deployedTimestamp ?? detail.failedTimestamp ?? detail.undeployedTimestamp;
+    const stageStatus =
+      detail.status === "FAIL"
+        ? "FAIL"
+        : terminal
+          ? "DONE"
+          : detail.status === "SCHEDULED"
+            ? "PENDING"
+            : "RUNNING";
+    const message =
+      detail.status === "FAIL"
+        ? (snapshot.failureMessage ?? "The simulated deployment failed.")
+        : undefined;
+    const step: DeploymentProgress["stages"][number]["steps"][number] = {
+      code: "deploy-services",
+      name: "Deploy services",
+      startTimestamp,
+      status: stageStatus,
+      children: [],
+    };
+    if (endTimestamp) step.endTimestamp = endTimestamp;
+    if (message) step.message = message;
+    const stage: DeploymentProgress["stages"][number] = {
+      name: "Deployment",
+      type: "DEPLOYMENT",
+      startTimestamp,
+      status: stageStatus,
+      steps: [step],
+    };
+    if (endTimestamp) stage.endTimestamp = endTimestamp;
+    return {
+      ok: true,
+      value: {
+        subscriptionCode,
+        deploymentCode,
+        deploymentStatus: detail.status,
+        percentage,
+        stages: [stage],
+      },
+    };
+  }
+
+  getDeploymentDecisions(
+    subscriptionCode: string,
+    deploymentCode: string,
+  ): RunResult<{ deploymentDecisions: DeploymentDetail["decisions"] }> {
+    const subscriptionError = this.checkSubscription<{
+      deploymentDecisions: DeploymentDetail["decisions"];
+    }>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<{
+      deploymentDecisions: DeploymentDetail["decisions"];
+    }>("getDeploymentDecisions", deploymentCode);
+    if (fault) return fault;
+    const row = this.deploymentRow(subscriptionCode, deploymentCode);
+    if (!row) return this.failure(404, "deployment_not_found", "The deployment was not found.");
+    return { ok: true, value: { deploymentDecisions: this.deploymentDetail(row).decisions } };
+  }
+
+  createDeploymentDecision(
+    subscriptionCode: string,
+    deploymentCode: string,
+    request: DeploymentDecisionRequest,
+  ): RunResult<{ newDeploymentCode?: string; decision: string }> {
+    const subscriptionError = this.checkSubscription<{
+      newDeploymentCode?: string;
+      decision: string;
+    }>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<{ newDeploymentCode?: string; decision: string }>(
+      "createDeploymentDecision",
+      deploymentCode,
+    );
+    if (fault) return fault;
+    const row = this.deploymentRow(subscriptionCode, deploymentCode);
+    if (!row) return this.failure(404, "deployment_not_found", "The deployment was not found.");
+    const detail = this.deploymentDetail(row);
+    if (detail.strategy !== "GREEN" || !detail.awaitingDecision) {
+      return this.failure(
+        409,
+        "decision_not_available",
+        "This deployment is not awaiting a decision.",
+      );
+    }
+    const now = new Date().toISOString();
+    const decision = {
+      ...(request.reason === undefined ? {} : { reason: request.reason }),
+      type: request.decision,
+      subscriptionCode,
+      deploymentCode,
+      createdTimestamp: now,
+      createdBy: "sandbox-technical-user",
+    };
+    detail.decisions.push(decision);
+    if (request.decision === "REJECT") {
+      detail.status = "UNDEPLOYED";
+      detail.undeployedTimestamp = now;
+      detail.awaitingDecision = false;
+      detail.canaryStatus = "FAILED";
+    } else if (request.decision === "PREPARE_CANARY") {
+      detail.status = "DEPLOYING";
+      detail.canaryStatus = "SUCCEEDED";
+      detail.trafficSplit = {
+        services: [{ code: "commerce", percentage: 10, name: "Commerce service" }],
+        endpoints: [{ code: "storefront", percentage: 10, name: "Storefront" }],
+      };
+    } else {
+      this.applyDeploymentTerminal(detail, "DEPLOYED", now);
+      detail.awaitingDecision = false;
+      detail.canaryStatus = "SUCCEEDED";
+    }
+    this.saveDeployment(detail, row.poll_count);
+    this.recordEvent("deployment.decision", "createDeploymentDecision", deploymentCode, 201, {
+      decision: request.decision,
+    });
+    return request.decision === "REJECT"
+      ? { ok: true, value: { decision: request.decision } }
+      : { ok: true, value: { newDeploymentCode: deploymentCode, decision: request.decision } };
+  }
+
+  getDeploymentCancellationOptions(
+    subscriptionCode: string,
+    deploymentCode: string,
+  ): RunResult<{ databaseRollbackRestoreTimestamp: string }> {
+    const subscriptionError = this.checkSubscription<{
+      databaseRollbackRestoreTimestamp: string;
+    }>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<{ databaseRollbackRestoreTimestamp: string }>(
+      "getDeploymentCancellationOptions",
+      deploymentCode,
+    );
+    if (fault) return fault;
+    const row = this.deploymentRow(subscriptionCode, deploymentCode);
+    if (!row) return this.failure(404, "deployment_not_found", "The deployment was not found.");
+    const detail = this.deploymentDetail(row);
+    if (detail.status !== "SCHEDULED" && detail.status !== "DEPLOYING") {
+      return this.failure(
+        409,
+        "cancellation_not_available",
+        "The deployment cannot be canceled in its current state.",
+      );
+    }
+    const snapshot = JSON.parse(row.scenario_json) as Scenario["deployment"];
+    if (!snapshot.cancellationAllowed) {
+      return this.failure(
+        409,
+        "cancellation_not_available",
+        "Cancellation is disabled by the scenario.",
+      );
+    }
+    return { ok: true, value: { databaseRollbackRestoreTimestamp: detail.createdTimestamp } };
+  }
+
+  createDeploymentCancellation(
+    subscriptionCode: string,
+    deploymentCode: string,
+    request: DeploymentCancellationRequest,
+  ): RunResult<null> {
+    const subscriptionError = this.checkSubscription<null>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<null>("createDeploymentCancellation", deploymentCode);
+    if (fault) return fault;
+    const row = this.deploymentRow(subscriptionCode, deploymentCode);
+    if (!row) return this.failure(404, "deployment_not_found", "The deployment was not found.");
+    const detail = this.deploymentDetail(row);
+    const snapshot = JSON.parse(row.scenario_json) as Scenario["deployment"];
+    if (
+      !snapshot.cancellationAllowed ||
+      (detail.status !== "SCHEDULED" && detail.status !== "DEPLOYING")
+    ) {
+      return this.failure(
+        409,
+        "cancellation_not_available",
+        "The deployment cannot be canceled in its current state.",
+      );
+    }
+    const now = new Date().toISOString();
+    detail.status = "UNDEPLOYED";
+    detail.undeployedTimestamp = now;
+    detail.awaitingDecision = false;
+    detail.cancelation = {
+      canceledBy: "sandbox-technical-user",
+      startTimestamp: now,
+      finishedTimestamp: now,
+      failed: false,
+      ...(request.rollbackDatabase === undefined
+        ? {}
+        : { rollbackDatabase: request.rollbackDatabase }),
+      ...(request.cancelReason === undefined ? {} : { cancelReason: request.cancelReason }),
+    };
+    this.saveDeployment(detail, row.poll_count);
+    this.recordEvent("deployment.canceled", "createDeploymentCancellation", deploymentCode, 202);
+    return { ok: true, value: null };
+  }
+
+  getDeploymentTrafficSplit(
+    subscriptionCode: string,
+    deploymentCode: string,
+  ): RunResult<TrafficSplit> {
+    const subscriptionError = this.checkSubscription<TrafficSplit>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<TrafficSplit>("getDeploymentTrafficSplit", deploymentCode);
+    if (fault) return fault;
+    const row = this.deploymentRow(subscriptionCode, deploymentCode);
+    if (!row) return this.failure(404, "deployment_not_found", "The deployment was not found.");
+    return { ok: true, value: this.deploymentDetail(row).trafficSplit };
+  }
+
+  updateDeploymentTrafficSplit(
+    subscriptionCode: string,
+    deploymentCode: string,
+    request: TrafficSplitRequest,
+  ): RunResult<TrafficSplit> {
+    const subscriptionError = this.checkSubscription<TrafficSplit>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<TrafficSplit>("updateDeploymentTrafficSplit", deploymentCode);
+    if (fault) return fault;
+    const row = this.deploymentRow(subscriptionCode, deploymentCode);
+    if (!row) return this.failure(404, "deployment_not_found", "The deployment was not found.");
+    const detail = this.deploymentDetail(row);
+    if (detail.strategy !== "GREEN") {
+      return this.failure(
+        409,
+        "traffic_split_not_available",
+        "Traffic splitting requires the GREEN strategy.",
+      );
+    }
+    const split: TrafficSplit = {
+      services: (request.services ?? []).map((item) => ({ ...item, name: item.code })),
+      endpoints: (request.endpoints ?? []).map((item) => ({ ...item, name: item.code })),
+    };
+    detail.trafficSplit = split;
+    this.saveDeployment(detail, row.poll_count);
+    const count = this.ctx.storage.sql
+      .exec<CountRow>(
+        "SELECT COUNT(*) AS count FROM resources WHERE kind = 'trafficSplit' AND code LIKE ?",
+        `${deploymentCode}:%`,
+      )
+      .one().count;
+    const history = {
+      deploymentCode,
+      ...split,
+      lastModifiedTimestamp: new Date().toISOString(),
+      lastModifiedBy: "sandbox-technical-user",
+      subscriptionCode,
+      code: `traffic_${String(count + 1).padStart(6, "0")}`,
+    };
+    this.ctx.storage.sql.exec(
+      `INSERT INTO resources
+        (kind, subscription_code, environment_code, code, state_json, created_at)
+       VALUES ('trafficSplit', ?, ?, ?, ?, ?)`,
+      subscriptionCode,
+      detail.environmentCode,
+      `${deploymentCode}:${history.code}`,
+      JSON.stringify(history),
+      history.lastModifiedTimestamp,
+    );
+    return { ok: true, value: split };
+  }
+
+  getDeploymentTrafficSplitHistory(
+    subscriptionCode: string,
+    deploymentCode: string,
+  ): RunResult<{ value: TrafficSplitHistoryEntry[]; count: number }> {
+    const subscriptionError = this.checkSubscription<{
+      value: TrafficSplitHistoryEntry[];
+      count: number;
+    }>(subscriptionCode);
+    if (subscriptionError) return subscriptionError;
+    const fault = this.faultFailure<{ value: TrafficSplitHistoryEntry[]; count: number }>(
+      "getDeploymentTrafficSplitHistory",
+      deploymentCode,
+    );
+    if (fault) return fault;
+    if (!this.deploymentRow(subscriptionCode, deploymentCode)) {
+      return this.failure(404, "deployment_not_found", "The deployment was not found.");
+    }
+    const value = this.ctx.storage.sql
+      .exec<ResourceRow>(
+        `SELECT code, state_json, created_at FROM resources
+         WHERE kind = 'trafficSplit' AND subscription_code = ? AND code LIKE ?
+         ORDER BY created_at DESC`,
+        subscriptionCode,
+        `${deploymentCode}:%`,
+      )
+      .toArray()
+      .map((row) => JSON.parse(row.state_json) as TrafficSplitHistoryEntry);
+    return { ok: true, value: { value, count: value.length } };
+  }
+
   async getScenario(controlTokenHash: string): Promise<RunResult<Scenario>> {
     const authorization = await this.authorizeControl(controlTokenHash);
     if (!authorization.ok) return authorization;
@@ -651,6 +1173,104 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
 
   private buildDetail(row: BuildRow): BuildDetail {
     return JSON.parse(row.state_json) as BuildDetail;
+  }
+
+  private deploymentRows(subscriptionCode: string): DeploymentRow[] {
+    return this.ctx.storage.sql
+      .exec<DeploymentRow>(
+        `SELECT code, subscription_code, environment_code, build_code, state_json,
+                scenario_json, poll_count, created_at
+         FROM deployments WHERE subscription_code = ? ORDER BY created_at ASC, code ASC`,
+        subscriptionCode,
+      )
+      .toArray();
+  }
+
+  private deploymentRow(
+    subscriptionCode: string,
+    deploymentCode: string,
+  ): DeploymentRow | undefined {
+    return this.ctx.storage.sql
+      .exec<DeploymentRow>(
+        `SELECT code, subscription_code, environment_code, build_code, state_json,
+                scenario_json, poll_count, created_at
+         FROM deployments WHERE subscription_code = ? AND code = ?`,
+        subscriptionCode,
+        deploymentCode,
+      )
+      .toArray()[0];
+  }
+
+  private deploymentDetail(row: DeploymentRow): DeploymentDetail {
+    return JSON.parse(row.state_json) as DeploymentDetail;
+  }
+
+  private saveDeployment(detail: DeploymentDetail, pollCount: number): void {
+    this.ctx.storage.sql.exec(
+      "UPDATE deployments SET state_json = ?, poll_count = ? WHERE code = ?",
+      JSON.stringify(detail),
+      pollCount,
+      detail.code,
+    );
+  }
+
+  private defaultTrafficSplit(strategy: CreateDeploymentRequest["strategy"]): TrafficSplit {
+    const percentage = strategy === "GREEN" ? 0 : 100;
+    return {
+      services: [{ code: "commerce", percentage, name: "Commerce service" }],
+      endpoints: [{ code: "storefront", percentage, name: "Storefront" }],
+    };
+  }
+
+  private applyDeploymentTerminal(
+    detail: DeploymentDetail,
+    outcome: Scenario["deployment"]["outcome"],
+    timestamp: string,
+  ): void {
+    if (outcome === "FAIL") {
+      detail.status = "FAIL";
+      detail.failedTimestamp = timestamp;
+    } else if (outcome === "DEPLOYED") {
+      detail.status = "DEPLOYED";
+      detail.deployedTimestamp = timestamp;
+      detail.trafficSplit = this.defaultTrafficSplit(detail.strategy);
+      for (const row of this.deploymentRows(detail.subscriptionCode)) {
+        const previous = this.deploymentDetail(row);
+        if (
+          previous.code !== detail.code &&
+          previous.environmentCode === detail.environmentCode &&
+          previous.status === "DEPLOYED"
+        ) {
+          previous.status = "UNDEPLOYED";
+          previous.undeployedTimestamp = timestamp;
+          this.saveDeployment(previous, row.poll_count);
+        }
+      }
+      const buildRow = this.buildRow(detail.subscriptionCode, detail.buildCode);
+      if (buildRow) {
+        const build = this.buildDetail(buildRow);
+        build.deployed = true;
+        this.ctx.storage.sql.exec(
+          "UPDATE builds SET state_json = ? WHERE code = ?",
+          JSON.stringify(build),
+          build.code,
+        );
+      }
+    }
+    if (outcome !== "NEVER") {
+      this.recordEvent("deployment.terminal", "getDeploymentProgress", detail.code, 200, {
+        status: detail.status,
+      });
+      console.log(
+        JSON.stringify({
+          event: "ccv2.deployment.terminal",
+          runId: this.metadataRow()?.run_id,
+          operationId: "getDeploymentProgress",
+          resourceId: detail.code,
+          status: detail.status,
+        }),
+      );
+    }
   }
 
   private securityRow(): RunSecurityRow | undefined {

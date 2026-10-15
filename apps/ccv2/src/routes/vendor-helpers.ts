@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { BuildListOptions, BuildStatus } from "../domain/build";
+import type { DeploymentListOptions, DeploymentStatus } from "../domain/deployment";
 import type { RunResult } from "../domain/run";
 import { vendorProblem } from "../http";
 
@@ -63,6 +64,43 @@ export function parseBuildListOptions(url: URL): BuildListOptions {
     skip: integer("$skip", 0, 100_000),
     orderBy: recognizedOrder,
     ...(statusNot === undefined ? {} : { statusNot: statusNot as BuildStatus }),
+  };
+}
+
+export function parseDeploymentListOptions(url: URL): DeploymentListOptions {
+  const parseInteger = (name: string, fallback: number, maximum: number): number => {
+    const value = url.searchParams.get(name);
+    if (value === null) return fallback;
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > maximum) {
+      throw new Error(`${name} must be an integer from 0 to ${String(maximum)}.`);
+    }
+    return parsed;
+  };
+  const order = url.searchParams.get("$orderby") ?? "createdTimestamp desc";
+  if (order !== "createdTimestamp asc" && order !== "createdTimestamp desc") {
+    throw new Error("$orderby must be createdTimestamp asc or createdTimestamp desc.");
+  }
+  const status = url.searchParams.get("status") ?? undefined;
+  const statuses = new Set<DeploymentStatus>([
+    "SCHEDULED",
+    "DEPLOYING",
+    "DEPLOYED",
+    "UNDEPLOYED",
+    "FAIL",
+  ]);
+  if (status !== undefined && !statuses.has(status as DeploymentStatus)) {
+    throw new Error("status is not a recognized deployment status.");
+  }
+  const buildCode = url.searchParams.get("buildCode");
+  const environmentCode = url.searchParams.get("environmentCode");
+  return {
+    top: parseInteger("$top", 100, 100),
+    skip: parseInteger("$skip", 0, 100_000),
+    orderDescending: order.endsWith("desc"),
+    ...(buildCode ? { buildCode } : {}),
+    ...(environmentCode ? { environmentCode } : {}),
+    ...(status === undefined ? {} : { status: status as DeploymentStatus }),
   };
 }
 
