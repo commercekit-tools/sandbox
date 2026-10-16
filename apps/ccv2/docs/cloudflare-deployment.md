@@ -22,6 +22,11 @@ integer in `wrangler.jsonc` before merge. For stronger perimeter control, add a
 Cloudflare WAF rate-limit rule for `POST /sandbox/v1/runs` using the same 30/minute
 policy. The binding remains the application-level enforcement point.
 
+The Workers Rate Limiting binding applies independently by Cloudflare location
+and is intentionally permissive/eventually consistent. It prevents straightforward
+anonymous bursts but is not an exact global quota or an authentication mechanism.
+Do not validate it with production load tests.
+
 ## Secrets required before merge
 
 | Secret                  | Purpose                                                     |
@@ -64,7 +69,9 @@ multi-key rotation strategy is added later.
 3. Provision the four required secrets.
 4. Confirm rate-limit namespace `1001` is available.
 5. Run `pnpm run ci` from the repository root.
-6. Merge only after the PR and Cloudflare Workers Build configuration are ready.
+6. Run `CCV2_CONFIRM_PRODUCTION=1 pnpm smoke:production` against the current
+   deployment and retain only the sanitized summary.
+7. Merge only after the PR and Cloudflare Workers Build configuration are ready.
 
 ## Post-deployment checks
 
@@ -75,3 +82,5 @@ multi-key rotation strategy is added later.
 5. Check structured Worker logs for errors without credential values.
 
 No manual feature-branch deployment or GitHub deployment workflow is required.
+The smoke command verifies the currently deployed `main` Worker; it does not
+deploy or exercise unmerged feature-branch code.

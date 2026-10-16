@@ -13,7 +13,7 @@ describe("run control and synthetic OAuth", () => {
     expect(first.runId).not.toBe(second.runId);
     expect(first.controlToken).not.toBe(second.controlToken);
     expect(first.credentials.clientSecret).not.toBe(second.credentials.clientSecret);
-    expect(first.credentials.tokenUrl).toBe("https://ccv2.sandbox.commercekit.tools/oauth2/token");
+    expect(first.credentials.tokenUrl).toBe(`${env.MOCK_JWT_ISSUER}/oauth2/token`);
 
     const unauthorized = await worker.default.fetch(
       `https://example.com/sandbox/v1/runs/${first.runId}`,
@@ -41,7 +41,7 @@ describe("run control and synthetic OAuth", () => {
     expect(JSON.parse(text)).toMatchObject({
       runId: first.runId,
       scenario: DEFAULT_SCENARIO,
-      schemaVersion: 2,
+      schemaVersion: 3,
     });
   });
 
@@ -111,7 +111,7 @@ describe("run control and synthetic OAuth", () => {
     if (!publicJwk) throw new Error("JWKS did not contain a public key");
     const key = await importJWK(publicJwk, "RS256");
     const verified = await jwtVerify(token, key, {
-      issuer: "https://ccv2.sandbox.commercekit.tools",
+      issuer: env.MOCK_JWT_ISSUER,
       audience: run.credentials.resource,
     });
     expect(verified.payload).toMatchObject({ run_id: run.runId, sub: run.runId });
@@ -157,6 +157,7 @@ describe("run control and synthetic OAuth", () => {
 
   it("removes storage when the run alarm fires", async () => {
     const run = await createRun();
+    const token = await issueToken(run);
     const stub = env.CCV2_RUN.getByName(run.runId);
     expect(await runDurableObjectAlarm(stub)).toBe(true);
     const response = await worker.default.fetch(
@@ -166,6 +167,11 @@ describe("run control and synthetic OAuth", () => {
       },
     );
     expect(response.status).toBe(404);
+    const vendorResponse = await worker.default.fetch(
+      "https://example.com/v2/subscriptions/SUBSCRIPTION_001/builds",
+      { headers: { "x-approuter-authorization": `Bearer ${token}` } },
+    );
+    expect(vendorResponse.status).toBe(401);
   });
 
   it("enforces the scenario request size limit", async () => {

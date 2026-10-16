@@ -43,5 +43,5 @@ export interface BuildListOptions {
   top: number;
   skip: number;
   orderBy: "createdAt asc" | "createdAt desc" | "name asc" | "name desc";
-  statusNot?: BuildStatus;
+  statusNot?: BuildStatus[];
 }

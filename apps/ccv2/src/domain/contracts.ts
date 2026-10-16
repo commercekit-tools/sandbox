@@ -160,7 +160,7 @@ export const managementOperations = [
     method: "GET",
     path: `${subscription}/deployments/{deploymentCode}/trafficsplit`,
     operationId: "getTrafficSplit",
-    responseSchema: "DeploymentTrafficSplitDTO",
+    responseSchema: "TrafficSplitDetailDTO",
     success: [200],
   },
   {
@@ -169,7 +169,7 @@ export const managementOperations = [
     path: `${subscription}/deployments/{deploymentCode}/trafficsplit`,
     operationId: "updateTrafficSplit",
     requestSchema: "UpdateTrafficSplitRequestDTO",
-    responseSchema: "DeploymentTrafficSplitDTO",
+    responseSchema: "TrafficSplitDetailDTO",
     success: [201],
   },
   {
@@ -177,7 +177,7 @@ export const managementOperations = [
     method: "GET",
     path: `${subscription}/deployments/{deploymentCode}/trafficsplit/history`,
     operationId: "getTrafficSplitHistory",
-    responseSchema: "DeploymentTrafficSplitHistoryDTO",
+    responseSchema: "TrafficSplitHistoryListDTO",
     success: [200],
   },
   {

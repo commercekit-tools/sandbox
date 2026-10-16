@@ -57,7 +57,7 @@ describe("SAP-compatible build API", () => {
       headers: sapHeaders(token),
     });
     expect(logs.status).toBe(200);
-    expect(logs.headers.get("Content-Type")).toBe("application/zip");
+    expect(logs.headers.get("Content-Type")).toBe("application/octet-stream");
     expect(logs.headers.get("Content-Disposition")).toContain(`${created.code}-logs.zip`);
     const bytes = new Uint8Array(await logs.arrayBuffer());
     expect(Array.from(bytes.slice(0, 4))).toEqual([0x50, 0x4b, 0x03, 0x04]);

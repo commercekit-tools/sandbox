@@ -40,12 +40,12 @@ export function vendorError(result: Extract<RunResult<unknown>, { ok: false }>):
 }
 
 export function parseBuildListOptions(url: URL): BuildListOptions {
-  const integer = (name: string, fallback: number, maximum: number): number => {
+  const integer = (name: string, fallback: number, minimum: number, maximum: number): number => {
     const value = url.searchParams.get(name);
     if (value === null) return fallback;
     const parsed = Number(value);
-    if (!Number.isInteger(parsed) || parsed < 0 || parsed > maximum) {
-      throw new Error(`${name} must be an integer from 0 to ${String(maximum)}.`);
+    if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+      throw new Error(`${name} must be an integer from ${String(minimum)} to ${String(maximum)}.`);
     }
     return parsed;
   };
@@ -55,25 +55,34 @@ export function parseBuildListOptions(url: URL): BuildListOptions {
   if (!recognizedOrder) {
     throw new Error("$orderby must select createdAt or name with asc or desc.");
   }
-  const statusNot = url.searchParams.get("statusNot") ?? undefined;
-  if (statusNot !== undefined && !buildStatuses.has(statusNot as BuildStatus)) {
-    throw new Error("statusNot is not a recognized build status.");
+  const statusNot = url.searchParams
+    .getAll("statusNot")
+    .flatMap((value) => value.split(","))
+    .filter(Boolean);
+  if (statusNot.some((status) => !buildStatuses.has(status as BuildStatus))) {
+    throw new Error("statusNot contains an unrecognized build status.");
   }
+  parseCount(url);
   return {
-    top: integer("$top", 100, 100),
-    skip: integer("$skip", 0, 100_000),
+    top: integer("$top", 100, 1, 100),
+    skip: integer("$skip", 0, 0, 100_000),
     orderBy: recognizedOrder,
-    ...(statusNot === undefined ? {} : { statusNot: statusNot as BuildStatus }),
+    ...(statusNot.length === 0 ? {} : { statusNot: statusNot as BuildStatus[] }),
   };
 }
 
 export function parseDeploymentListOptions(url: URL): DeploymentListOptions {
-  const parseInteger = (name: string, fallback: number, maximum: number): number => {
+  const parseInteger = (
+    name: string,
+    fallback: number,
+    minimum: number,
+    maximum: number,
+  ): number => {
     const value = url.searchParams.get(name);
     if (value === null) return fallback;
     const parsed = Number(value);
-    if (!Number.isInteger(parsed) || parsed < 0 || parsed > maximum) {
-      throw new Error(`${name} must be an integer from 0 to ${String(maximum)}.`);
+    if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+      throw new Error(`${name} must be an integer from ${String(minimum)} to ${String(maximum)}.`);
     }
     return parsed;
   };
@@ -94,14 +103,24 @@ export function parseDeploymentListOptions(url: URL): DeploymentListOptions {
   }
   const buildCode = url.searchParams.get("buildCode");
   const environmentCode = url.searchParams.get("environmentCode");
+  parseCount(url);
   return {
-    top: parseInteger("$top", 100, 100),
-    skip: parseInteger("$skip", 0, 100_000),
+    top: parseInteger("$top", 100, 1, 100),
+    skip: parseInteger("$skip", 0, 0, 100_000),
     orderDescending: order.endsWith("desc"),
     ...(buildCode ? { buildCode } : {}),
     ...(environmentCode ? { environmentCode } : {}),
     ...(status === undefined ? {} : { status: status as DeploymentStatus }),
   };
+}
+
+export function parseCount(url: URL): boolean | undefined {
+  const count = url.searchParams.get("$count");
+  if (count === null) return undefined;
+  if (count !== "true" && count !== "false") {
+    throw new Error("$count must be true or false.");
+  }
+  return count === "true";
 }
 
 export function zodDetail(error: z.ZodError): string {

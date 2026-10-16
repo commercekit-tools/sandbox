@@ -10,6 +10,8 @@
   },
   "scripts": {
     "dev:ccv2": "pnpm --filter @commercekit/sandbox-ccv2 dev",
+    "smoke:ccv2": "pnpm --filter @commercekit/sandbox-ccv2 smoke",
+    "smoke:production": "pnpm --filter @commercekit/sandbox-ccv2 smoke:production",
     "types:ccv2": "pnpm --filter @commercekit/sandbox-ccv2 types",
     "lint": "eslint .",
     "format": "prettier --write .",

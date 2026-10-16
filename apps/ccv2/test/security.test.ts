@@ -6,14 +6,19 @@ import { createRun, issueToken, sapHeaders } from "./helpers";
 
 const builds = "https://example.com/v2/subscriptions/SUBSCRIPTION_001/builds";
 
-async function customToken(runId: string, audience: string, expiration: number): Promise<string> {
+async function customToken(
+  runId: string,
+  audience: string,
+  expiration: number,
+  overrides: { issuer?: string; kid?: string; subject?: string } = {},
+): Promise<string> {
   const key = await importPKCS8(env.MOCK_JWT_PRIVATE_KEY, "RS256");
   const now = Math.floor(Date.now() / 1_000);
   return new SignJWT({ run_id: runId })
-    .setProtectedHeader({ alg: "RS256", kid: env.MOCK_JWT_KID })
-    .setIssuer(env.MOCK_JWT_ISSUER)
+    .setProtectedHeader({ alg: "RS256", kid: overrides.kid ?? env.MOCK_JWT_KID })
+    .setIssuer(overrides.issuer ?? env.MOCK_JWT_ISSUER)
     .setAudience(audience)
-    .setSubject(runId)
+    .setSubject(overrides.subject ?? runId)
     .setIssuedAt(now - 100)
     .setExpirationTime(expiration)
     .sign(key);
@@ -49,6 +54,75 @@ describe("authentication and abuse boundaries", () => {
       headers: sapHeaders(valid),
     });
     expect(overlong.status).toBe(400);
+  });
+
+  it("rejects algorithm confusion, wrong claims, malformed tokens, and oversized credentials", async () => {
+    const run = await createRun();
+    const token = await issueToken(run);
+    const now = Math.floor(Date.now() / 1_000);
+    const wrongIssuer = await customToken(run.runId, run.credentials.resource, now + 600, {
+      issuer: "https://issuer.invalid",
+    });
+    const wrongKid = await customToken(run.runId, run.credentials.resource, now + 600, {
+      kid: "unknown-key",
+    });
+    const wrongSubject = await customToken(run.runId, run.credentials.resource, now + 600, {
+      subject: "another-run",
+    });
+    const hmac = await new SignJWT({ run_id: run.runId })
+      .setProtectedHeader({ alg: "HS256", kid: env.MOCK_JWT_KID })
+      .setIssuer(env.MOCK_JWT_ISSUER)
+      .setAudience(run.credentials.resource)
+      .setSubject(run.runId)
+      .setExpirationTime(now + 600)
+      .sign(new TextEncoder().encode("not-the-rsa-public-key"));
+
+    for (const invalid of [wrongIssuer, wrongKid, wrongSubject, hmac, "not.a.jwt"]) {
+      expect((await worker.default.fetch(builds, { headers: sapHeaders(invalid) })).status).toBe(
+        401,
+      );
+    }
+    expect(
+      (
+        await worker.default.fetch(builds, {
+          headers: { "x-approuter-authorization": `Bearer ${"x".repeat(9_000)}` },
+        })
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await worker.default.fetch(builds, {
+          headers: { "x-approuter-authorization": `Bearer ${run.controlToken}` },
+        })
+      ).status,
+    ).toBe(401);
+    const controlWithSapToken = await worker.default.fetch(
+      `https://example.com/sandbox/v1/runs/${run.runId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    expect(controlWithSapToken.status).toBe(403);
+    expect(
+      (
+        await worker.default.fetch(`https://example.com/sandbox/v1/runs/${"x".repeat(300)}`, {
+          headers: { Authorization: `Bearer ${run.controlToken}` },
+        })
+      ).status,
+    ).toBe(400);
+  });
+
+  it("revokes already-issued access tokens when a run is deleted", async () => {
+    const run = await createRun();
+    const token = await issueToken(run);
+    expect((await worker.default.fetch(builds, { headers: sapHeaders(token) })).status).toBe(200);
+    expect(
+      (
+        await worker.default.fetch(`https://example.com/sandbox/v1/runs/${run.runId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${run.controlToken}` },
+        })
+      ).status,
+    ).toBe(204);
+    expect((await worker.default.fetch(builds, { headers: sapHeaders(token) })).status).toBe(401);
   });
 
   it("serializes concurrent build creation into unique persistent resources", async () => {

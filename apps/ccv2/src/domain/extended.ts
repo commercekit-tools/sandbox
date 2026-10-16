@@ -46,20 +46,44 @@ export const createDatarestoreSchema = z
     message: "databackupCode or restorePointTime is required.",
   });
 
-const scaleItem = z
+const scalingCode = z.string().trim().min(1).max(100);
+const namedCode = z.object({ code: scalingCode, name: z.string().max(255).optional() }).strict();
+
+const kubernetesClusterScale = z
   .object({
-    code: z.string().trim().min(1).max(100),
-    replicas: z.number().int().min(1).max(20).optional(),
-    size: z.string().trim().min(1).max(50).optional(),
+    code: scalingCode,
+    maxWorkerCount: z.number().int().min(1).max(100).optional(),
+    workerVmType: namedCode.optional(),
+  })
+  .strict();
+
+const databaseSchemaScale = z
+  .object({
+    code: scalingCode,
+    maxSizeInMb: z.number().int().positive().max(100_000_000).optional(),
+    haReplicaCount: z.number().int().min(0).max(20).optional(),
+    performance: namedCode.optional(),
+  })
+  .strict();
+
+const serviceScale = z
+  .object({
+    code: scalingCode,
+    replicas: z.number().int().min(0).max(20).optional(),
+    requestsCpu: z.string().trim().min(1).max(50).optional(),
+    noLimitsCpu: z.boolean().optional(),
+    requestsMemory: z.string().trim().min(1).max(50).optional(),
+    memoryScaleFactor: z.number().positive().max(100).optional(),
+    storageSize: z.string().trim().min(1).max(50).optional(),
   })
   .strict();
 
 export const scalingUpdateSchema = z
   .object({
     hibernated: z.boolean().optional(),
-    kubernetesClusters: z.array(scaleItem).max(20).optional(),
-    databaseSchemas: z.array(scaleItem).max(20).optional(),
-    services: z.array(scaleItem).max(50).optional(),
+    kubernetesClusters: z.array(kubernetesClusterScale).max(20).optional(),
+    databaseSchemas: z.array(databaseSchemaScale).max(20).optional(),
+    services: z.array(serviceScale).max(50).optional(),
   })
   .strict();
 
@@ -77,7 +101,7 @@ export const updateScheduledActivitySchema = z
 export const servicePropertySchema = z
   .object({
     key: z.string().trim().min(1).max(100),
-    value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+    value: z.record(z.string(), z.unknown()),
     flags: z.array(z.string().max(100)).max(20).optional(),
   })
   .strict();
@@ -95,7 +119,7 @@ export const createCertificateSchema = z
 export const createRoleAssignmentSchema = z
   .object({
     username: z.string().trim().min(1).max(255),
-    email: z.email().optional(),
+    email: z.email(),
     role: z.string().trim().min(1).max(100),
     environments: z.array(z.string().trim().min(1).max(100)).max(20),
   })

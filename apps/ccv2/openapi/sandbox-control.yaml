@@ -84,7 +84,7 @@ paths:
           "200":
             {
               description: Sanitized run state,
-              content: { application/json: { schema: { type: object } } },
+              content: { application/json: { schema: { $ref: "#/components/schemas/RunState" } } },
             },
           default: { $ref: "#/components/responses/ControlError" },
         }
@@ -144,7 +144,11 @@ paths:
                       {
                         type: object,
                         required: [keys],
-                        properties: { keys: { type: array, items: { type: object } } },
+                        properties:
+                          {
+                            keys:
+                              { type: array, items: { $ref: "#/components/schemas/PublicJwk" } },
+                          },
                       },
                   },
               },
@@ -247,6 +251,34 @@ components:
         expiresAt: { type: string, format: date-time }
         schemaVersion: { type: integer }
         scenario: { $ref: "#/components/schemas/Scenario" }
+    RunState:
+      allOf:
+        - { $ref: "#/components/schemas/Run" }
+        - type: object
+          required: [counts, pollCounters, faultCounters]
+          properties:
+            counts:
+              type: object
+              additionalProperties: false
+              required: [builds, deployments, resources, events]
+              properties:
+                builds: { type: integer, minimum: 0 }
+                deployments: { type: integer, minimum: 0 }
+                resources: { type: integer, minimum: 0 }
+                events: { type: integer, minimum: 0 }
+            pollCounters: { type: object, additionalProperties: { type: integer, minimum: 0 } }
+            faultCounters: { type: object, additionalProperties: { type: integer, minimum: 0 } }
+    PublicJwk:
+      type: object
+      additionalProperties: false
+      required: [kty, n, e, kid, alg, use]
+      properties:
+        kty: { type: string, const: RSA }
+        n: { type: string }
+        e: { type: string }
+        kid: { type: string }
+        alg: { type: string, const: RS256 }
+        use: { type: string, const: sig }
     Scenario:
       type: object
       additionalProperties: false

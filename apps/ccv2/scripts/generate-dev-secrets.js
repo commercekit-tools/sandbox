@@ -15,7 +15,7 @@ const lines = [
   'ALLOWED_ORIGINS="https://commercekit.tools,http://localhost:3000"',
   'MOCK_JWT_ISSUER="http://localhost:8787"',
   `MOCK_JWT_PRIVATE_KEY=${JSON.stringify(privatePem)}`,
-  `MOCK_JWT_PUBLIC_JWK=${JSON.stringify(JSON.stringify(publicJwk))}`,
+  `MOCK_JWT_PUBLIC_JWK='${JSON.stringify(publicJwk)}'`,
   `MOCK_JWT_KID=${JSON.stringify(kid)}`,
   `RUN_TOKEN_SIGNING_KEY=${JSON.stringify(runSigningKey)}`,
   "",

@@ -12,10 +12,15 @@ export interface CreatedRun {
   };
 }
 
+let testIpSequence = 0;
+
 export async function createRun(): Promise<CreatedRun> {
+  testIpSequence += 1;
+  const thirdOctet = Math.floor(testIpSequence / 250) % 250;
+  const fourthOctet = (testIpSequence % 250) + 1;
   const response = await worker.default.fetch("https://example.com/sandbox/v1/runs", {
     method: "POST",
-    headers: { "CF-Connecting-IP": `192.0.2.${String(Math.floor(Math.random() * 250) + 1)}` },
+    headers: { "CF-Connecting-IP": `192.0.${String(thirdOctet)}.${String(fourthOctet)}` },
   });
   if (response.status !== 201)
     throw new Error(`Run creation failed with ${String(response.status)}`);

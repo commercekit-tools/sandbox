@@ -19,11 +19,12 @@ flowchart LR
   JWT --> SAP
 ```
 
-The SQLite schema is version 2. The original `run_metadata` table remains in
+The SQLite schema is version 3. The original `run_metadata` table remains in
 place, and `schema_migrations` records additive migrations. Security verifiers,
 scenario configuration, operation counters, builds, deployments, general API
-resources, and a capped event stream live in separate strict tables. Plaintext
-control tokens and client secrets are never stored.
+resources, monotonic resource sequences, and a capped event stream live in
+separate strict tables. Plaintext control tokens and client secrets are never
+stored.
 
 All state that affects API behavior is inside the Durable Object. Worker isolate
 memory is not authoritative. Mutations execute serially in the object, and SQL

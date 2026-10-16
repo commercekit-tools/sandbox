@@ -41,6 +41,14 @@ export async function secretVerifier(
 export function timingSafeTextEqual(first: string, second: string): boolean {
   const firstBytes = encoder.encode(first);
   const secondBytes = encoder.encode(second);
-  if (firstBytes.byteLength !== secondBytes.byteLength) return false;
-  return crypto.subtle.timingSafeEqual(firstBytes, secondBytes);
+  const comparedLength = Math.max(firstBytes.byteLength, secondBytes.byteLength, 1);
+  if (comparedLength > 1_024) return false;
+  const firstPadded = new Uint8Array(comparedLength);
+  const secondPadded = new Uint8Array(comparedLength);
+  firstPadded.set(firstBytes);
+  secondPadded.set(secondBytes);
+  return (
+    crypto.subtle.timingSafeEqual(firstPadded, secondPadded) &&
+    firstBytes.byteLength === secondBytes.byteLength
+  );
 }

@@ -65,6 +65,8 @@ export interface TrafficSplitHistoryEntry extends TrafficSplit {
   code: string;
 }
 
+export type TrafficSplitDetail = TrafficSplitHistoryEntry;
+
 export interface DeploymentDetail {
   code: string;
   subscriptionCode: string;

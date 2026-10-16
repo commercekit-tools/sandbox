@@ -32,7 +32,11 @@ paths:
         - { $ref: "#/components/parameters/Skip" }
         - { $ref: "#/components/parameters/OrderBy" }
         - { $ref: "#/components/parameters/Count" }
-        - { name: statusNot, in: query, schema: { $ref: "#/components/schemas/BuildStatus" } }
+        - {
+            name: statusNot,
+            in: query,
+            schema: { type: array, items: { $ref: "#/components/schemas/BuildStatus" } },
+          }
       responses:
         "200":
           {
@@ -127,7 +131,7 @@ paths:
           "200":
             {
               description: ZIP build log archive,
-              content: { application/zip: { schema: { type: string, format: binary } } },
+              content: { application/octet-stream: { schema: { type: string, format: binary } } },
             },
           default: { $ref: "#/components/responses/Problem" },
         }
@@ -143,14 +147,7 @@ paths:
               description: Deployment modes by environment,
               content:
                 {
-                  application/json:
-                    {
-                      schema:
-                        {
-                          type: array,
-                          items: { $ref: "#/components/schemas/DeploymentModesPerEnvironmentDTO" },
-                        },
-                    },
+                  application/json: { schema: { $ref: "#/components/schemas/DeploymentModesDTO" } },
                 },
             },
           default: { $ref: "#/components/responses/Problem" },
@@ -164,6 +161,7 @@ paths:
         - { $ref: "#/components/parameters/Top" }
         - { $ref: "#/components/parameters/Skip" }
         - { $ref: "#/components/parameters/OrderBy" }
+        - { $ref: "#/components/parameters/Count" }
         - { name: buildCode, in: query, schema: { type: string } }
         - { name: environmentCode, in: query, schema: { type: string } }
         - { name: status, in: query, schema: { $ref: "#/components/schemas/DeploymentStatus" } }
@@ -265,7 +263,14 @@ paths:
       responses:
         {
           "200":
-            { description: Decisions, content: { application/json: { schema: { type: object } } } },
+            {
+              description: Decisions,
+              content:
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/DeploymentDecisionsDTO" } },
+                },
+            },
           default: { $ref: "#/components/responses/Problem" },
         }
     post:
@@ -285,7 +290,13 @@ paths:
           "201":
             {
               description: Decision accepted,
-              content: { application/json: { schema: { type: object } } },
+              content:
+                {
+                  application/json:
+                    {
+                      schema: { $ref: "#/components/schemas/CreateDeploymentDecisionResponseDTO" },
+                    },
+                },
             },
           default: { $ref: "#/components/responses/Problem" },
         }
@@ -303,7 +314,11 @@ paths:
           "200":
             {
               description: Cancellation options,
-              content: { application/json: { schema: { type: object } } },
+              content:
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/DeploymentCancellationOptionsDTO" } },
+                },
             },
           "404": { $ref: "#/components/responses/Problem" },
           "501": { $ref: "#/components/responses/Problem" },
@@ -324,7 +339,7 @@ paths:
           content:
             {
               application/json:
-                { schema: { $ref: "#/components/schemas/DeploymentCancellationRequestDTO" } },
+                { schema: { $ref: "#/components/schemas/CreateDeploymentCancellationRequestDTO" } },
             },
         }
       responses:
@@ -347,7 +362,10 @@ paths:
             {
               description: Traffic split,
               content:
-                { application/json: { schema: { $ref: "#/components/schemas/TrafficSplitDTO" } } },
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/TrafficSplitDetailDTO" } },
+                },
             },
           default: { $ref: "#/components/responses/Problem" },
         }
@@ -358,7 +376,10 @@ paths:
         {
           required: true,
           content:
-            { application/json: { schema: { $ref: "#/components/schemas/TrafficSplitDTO" } } },
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/UpdateTrafficSplitRequestDTO" } },
+            },
         }
       responses:
         {
@@ -366,7 +387,10 @@ paths:
             {
               description: Traffic split updated,
               content:
-                { application/json: { schema: { $ref: "#/components/schemas/TrafficSplitDTO" } } },
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/TrafficSplitDetailDTO" } },
+                },
             },
           default: { $ref: "#/components/responses/Problem" },
         }
@@ -385,7 +409,10 @@ paths:
             {
               description: Traffic split history,
               content:
-                { application/json: { schema: { $ref: "#/components/schemas/ListEnvelope" } } },
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/TrafficSplitHistoryListDTO" } },
+                },
             },
           default: { $ref: "#/components/responses/Problem" },
         }
@@ -394,13 +421,19 @@ paths:
     get:
       tags: [environment]
       operationId: getEnvironments
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: deploymentStatus, in: query, schema: { type: string } }
       responses:
         {
           "200":
             {
               description: Environments,
               content:
-                { application/json: { schema: { $ref: "#/components/schemas/ListEnvelope" } } },
+                {
+                  application/json:
+                    { schema: { $ref: "#/components/schemas/EnvironmentDetailsDTO" } },
+                },
             },
           default: { $ref: "#/components/responses/Problem" },
         }
@@ -414,9 +447,14 @@ paths:
       {
         tags: [endpoint],
         operationId: getEndpoints,
+        parameters:
+          [
+            { name: webProxy, in: query, schema: { type: string, enum: [public, private, nat] } },
+            { name: service, in: query, schema: { type: string } },
+          ],
         responses:
           {
-            "200": { $ref: "#/components/responses/List" },
+            "200": { $ref: "#/components/responses/EndpointDetails" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -434,7 +472,7 @@ paths:
         }
       responses:
         {
-          "201": { $ref: "#/components/responses/Object" },
+          "201": { $ref: "#/components/responses/Endpoint" },
           default: { $ref: "#/components/responses/Problem" },
         }
   /v2/subscriptions/{subscriptionCode}/environments/{environmentCode}/endpoints/{endpointCode}:
@@ -450,7 +488,7 @@ paths:
         operationId: getEndpoint,
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/Endpoint" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -458,10 +496,10 @@ paths:
       {
         tags: [endpoint],
         operationId: updateEndpoint,
-        requestBody: { $ref: "#/components/requestBodies/Object" },
+        requestBody: { $ref: "#/components/requestBodies/UpdateEndpoint" },
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/Endpoint" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -487,7 +525,7 @@ paths:
         operationId: getDatabackups,
         responses:
           {
-            "200": { $ref: "#/components/responses/List" },
+            "200": { $ref: "#/components/responses/DatabackupDetails" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -495,10 +533,10 @@ paths:
       {
         tags: [databackup],
         operationId: createDatabackup,
-        requestBody: { $ref: "#/components/requestBodies/Object" },
+        requestBody: { $ref: "#/components/requestBodies/CreateDatabackup" },
         responses:
           {
-            "201": { $ref: "#/components/responses/Object" },
+            "201": { $ref: "#/components/responses/CreateDatabackup" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -515,7 +553,7 @@ paths:
         operationId: getDatabackup,
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/Databackup" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -540,10 +578,10 @@ paths:
       {
         tags: [databackup],
         operationId: changeDatabackupState,
-        requestBody: { $ref: "#/components/requestBodies/Object" },
+        requestBody: { $ref: "#/components/requestBodies/DatabackupState" },
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/Databackup" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -559,7 +597,7 @@ paths:
         operationId: getDatarestores,
         responses:
           {
-            "200": { $ref: "#/components/responses/List" },
+            "200": { $ref: "#/components/responses/DatarestoreDetails" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -567,10 +605,10 @@ paths:
       {
         tags: [databackup],
         operationId: createDatarestore,
-        requestBody: { $ref: "#/components/requestBodies/Object" },
+        requestBody: { $ref: "#/components/requestBodies/CreateDatarestore" },
         responses:
           {
-            "201": { $ref: "#/components/responses/Object" },
+            "201": { $ref: "#/components/responses/CreateDatarestore" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -587,7 +625,7 @@ paths:
         operationId: getDatarestore,
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/Datarestore" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -602,10 +640,10 @@ paths:
       {
         tags: [databackup],
         operationId: changeDatarestoreState,
-        requestBody: { $ref: "#/components/requestBodies/Object" },
+        requestBody: { $ref: "#/components/requestBodies/DatarestoreState" },
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/Datarestore" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -621,7 +659,7 @@ paths:
         operationId: getEnvironmentScalingDetail,
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/EnvironmentScaling" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -629,10 +667,10 @@ paths:
       {
         tags: [scaling],
         operationId: updateEnvironmentScalingDetail,
-        requestBody: { $ref: "#/components/requestBodies/Object" },
+        requestBody: { $ref: "#/components/requestBodies/EnvironmentScalingUpdate" },
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/EnvironmentScaling" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -648,7 +686,7 @@ paths:
         operationId: getEnvironmentScalingOption,
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/EnvironmentScalingOptions" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -662,9 +700,22 @@ paths:
       {
         tags: [scheduledActivity],
         operationId: getScheduledActivities,
+        parameters:
+          [
+            { name: activityType, in: query, schema: { type: array, items: { type: string } } },
+            {
+              name: status,
+              in: query,
+              schema:
+                { type: array, items: { $ref: "#/components/schemas/ScheduledActivityStatus" } },
+            },
+            { $ref: "#/components/parameters/Top" },
+            { $ref: "#/components/parameters/Skip" },
+            { $ref: "#/components/parameters/OrderBy" },
+          ],
         responses:
           {
-            "200": { $ref: "#/components/responses/List" },
+            "200": { $ref: "#/components/responses/ScheduledActivityDetails" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -672,10 +723,10 @@ paths:
       {
         tags: [scheduledActivity],
         operationId: createScheduledActivity,
-        requestBody: { $ref: "#/components/requestBodies/Object" },
+        requestBody: { $ref: "#/components/requestBodies/CreateScheduledActivity" },
         responses:
           {
-            "201": { $ref: "#/components/responses/Object" },
+            "201": { $ref: "#/components/responses/ScheduledActivity" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -692,7 +743,7 @@ paths:
         operationId: getScheduledActivity,
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/ScheduledActivity" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -700,10 +751,10 @@ paths:
       {
         tags: [scheduledActivity],
         operationId: updateScheduledActivity,
-        requestBody: { $ref: "#/components/requestBodies/Object" },
+        requestBody: { $ref: "#/components/requestBodies/UpdateScheduledActivity" },
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/ScheduledActivity" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -720,7 +771,7 @@ paths:
         operationId: cancelScheduledActivity,
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/ScheduledActivity" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -738,7 +789,7 @@ paths:
         operationId: getProperty,
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/ServiceProperty" },
             "403": { $ref: "#/components/responses/Problem" },
             "404": { $ref: "#/components/responses/Problem" },
           },
@@ -747,10 +798,10 @@ paths:
       {
         tags: [serviceProperties],
         operationId: putProperty,
-        requestBody: { $ref: "#/components/requestBodies/Object" },
+        requestBody: { $ref: "#/components/requestBodies/ServiceProperty" },
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/ServiceProperty" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -762,7 +813,7 @@ paths:
         operationId: getCertificates,
         responses:
           {
-            "200": { $ref: "#/components/responses/List" },
+            "200": { $ref: "#/components/responses/CertificateDetails" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -770,10 +821,10 @@ paths:
       {
         tags: [certificate],
         operationId: createCertificate,
-        requestBody: { $ref: "#/components/requestBodies/Object" },
+        requestBody: { $ref: "#/components/requestBodies/CreateCertificate" },
         responses:
           {
-            "201": { $ref: "#/components/responses/Object" },
+            "201": { $ref: "#/components/responses/Certificate" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -789,7 +840,7 @@ paths:
         operationId: getCertificateDetails,
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/Certificate" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -814,7 +865,8 @@ paths:
             "200":
               {
                 description: Roles,
-                content: { application/json: { schema: { type: array, items: { type: object } } } },
+                content:
+                  { application/json: { schema: { $ref: "#/components/schemas/RolesDTO" } } },
               },
             default: { $ref: "#/components/responses/Problem" },
           },
@@ -827,7 +879,7 @@ paths:
         operationId: getAllUserRoleAssignments,
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/UserRoleAssignments" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -835,10 +887,10 @@ paths:
       {
         tags: [userRoleAssignment],
         operationId: createUserRoleAssignment,
-        requestBody: { $ref: "#/components/requestBodies/Object" },
+        requestBody: { $ref: "#/components/requestBodies/CreateUserRoleAssignment" },
         responses:
           {
-            "201": { $ref: "#/components/responses/Object" },
+            "201": { $ref: "#/components/responses/UserRoleAssignment" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -846,10 +898,10 @@ paths:
       {
         tags: [userRoleAssignment],
         operationId: updateUserRoleAssignment,
-        requestBody: { $ref: "#/components/requestBodies/Object" },
+        requestBody: { $ref: "#/components/requestBodies/UpdateUserRoleAssignment" },
         responses:
           {
-            "200": { $ref: "#/components/responses/Object" },
+            "200": { $ref: "#/components/responses/UserRoleAssignment" },
             default: { $ref: "#/components/responses/Problem" },
           },
       }
@@ -857,7 +909,7 @@ paths:
       {
         tags: [userRoleAssignment],
         operationId: deleteUserRoleAssignment,
-        requestBody: { $ref: "#/components/requestBodies/Object" },
+        requestBody: { $ref: "#/components/requestBodies/DeleteUserRoleAssignment" },
         responses:
           {
             "204": { description: Role assignment deleted },
@@ -895,27 +947,148 @@ components:
     CertificateCode:
       { name: certificateCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
     Top:
-      { name: "$top", in: query, schema: { type: integer, minimum: 0, maximum: 100, default: 100 } }
+      { name: "$top", in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 100 } }
     Skip: { name: "$skip", in: query, schema: { type: integer, minimum: 0, default: 0 } }
     OrderBy: { name: "$orderby", in: query, schema: { type: string } }
     Count: { name: "$count", in: query, schema: { type: boolean } }
   requestBodies:
-    Object:
-      {
-        required: true,
-        content: { application/json: { schema: { type: object, additionalProperties: true } } },
-      }
+    UpdateEndpoint:
+      required: true
+      content:
+        application/merge-patch+json:
+          { schema: { $ref: "#/components/schemas/UpdateEndpointBody" } }
+    CreateDatabackup:
+      required: true
+      content:
+        application/json: { schema: { $ref: "#/components/schemas/CreateDatabackupRequestDTO" } }
+    DatabackupState:
+      required: true
+      content:
+        application/json: { schema: { $ref: "#/components/schemas/DatabackupStateChangeDTO" } }
+    CreateDatarestore:
+      required: true
+      content:
+        application/json: { schema: { $ref: "#/components/schemas/CreateDatarestoreRequestDTO" } }
+    DatarestoreState:
+      required: true
+      content:
+        application/json: { schema: { $ref: "#/components/schemas/DatarestoreStateChangeDTO" } }
+    EnvironmentScalingUpdate:
+      required: true
+      content:
+        application/json: { schema: { $ref: "#/components/schemas/EnvironmentScalingUpdateDTO" } }
+    CreateScheduledActivity:
+      required: true
+      content:
+        application/json:
+          { schema: { $ref: "#/components/schemas/CreateScheduledActivityRequestDTO" } }
+    UpdateScheduledActivity:
+      required: true
+      content:
+        application/json:
+          { schema: { $ref: "#/components/schemas/UpdateScheduledActivityRequestDTO" } }
+    ServiceProperty:
+      required: true
+      content:
+        application/json: { schema: { $ref: "#/components/schemas/ServicePropertyDTO" } }
+    CreateCertificate:
+      required: true
+      content:
+        application/json: { schema: { $ref: "#/components/schemas/CreateCertificateRequestDTO" } }
+    CreateUserRoleAssignment:
+      required: true
+      content:
+        application/json: { schema: { $ref: "#/components/schemas/CreateUserRoleAssignmentDTO" } }
+    UpdateUserRoleAssignment:
+      required: true
+      content:
+        application/json: { schema: { $ref: "#/components/schemas/UpdateUserRoleAssignmentDTO" } }
+    DeleteUserRoleAssignment:
+      required: true
+      content:
+        application/json: { schema: { $ref: "#/components/schemas/DeleteUserRoleAssignmentDTO" } }
   responses:
-    Object:
-      {
-        description: Resource,
-        content: { application/json: { schema: { type: object, additionalProperties: true } } },
-      }
-    List:
-      {
-        description: Resource list,
-        content: { application/json: { schema: { $ref: "#/components/schemas/ListEnvelope" } } },
-      }
+    EndpointDetails:
+      description: Endpoint collection
+      content: { application/json: { schema: { $ref: "#/components/schemas/EndpointDetailsDTO" } } }
+    Endpoint:
+      description: Endpoint
+      content: { application/json: { schema: { $ref: "#/components/schemas/EndpointDTO" } } }
+    DatabackupDetails:
+      description: Database backup collection
+      content:
+        { application/json: { schema: { $ref: "#/components/schemas/DatabackupDetailsDTO" } } }
+    CreateDatabackup:
+      description: Database backup created
+      content:
+        {
+          application/json:
+            { schema: { $ref: "#/components/schemas/CreateDatabackupResponseDTO" } },
+        }
+    Databackup:
+      description: Database backup
+      content:
+        { application/json: { schema: { $ref: "#/components/schemas/DatabackupDetailDTO" } } }
+    DatarestoreDetails:
+      description: Database restore collection
+      content:
+        { application/json: { schema: { $ref: "#/components/schemas/DatarestoreDetailsDTO" } } }
+    CreateDatarestore:
+      description: Database restore created
+      content:
+        {
+          application/json:
+            { schema: { $ref: "#/components/schemas/CreateDatarestoreResponseDTO" } },
+        }
+    Datarestore:
+      description: Database restore
+      content:
+        { application/json: { schema: { $ref: "#/components/schemas/DatarestoreDetailDTO" } } }
+    EnvironmentScaling:
+      description: Environment scaling detail
+      content:
+        {
+          application/json:
+            { schema: { $ref: "#/components/schemas/EnvironmentScalingDetailDTO" } },
+        }
+    EnvironmentScalingOptions:
+      description: Environment scaling options
+      content:
+        {
+          application/json:
+            { schema: { $ref: "#/components/schemas/EnvironmentScalingOptionsDTO" } },
+        }
+    ScheduledActivityDetails:
+      description: Scheduled activity collection
+      content:
+        {
+          application/json:
+            { schema: { $ref: "#/components/schemas/ScheduledActivityDetailsDTO" } },
+        }
+    ScheduledActivity:
+      description: Scheduled activity
+      content:
+        {
+          application/json: { schema: { $ref: "#/components/schemas/ScheduledActivityDetailDTO" } },
+        }
+    ServiceProperty:
+      description: Service property
+      content: { application/json: { schema: { $ref: "#/components/schemas/ServicePropertyDTO" } } }
+    CertificateDetails:
+      description: Certificate collection
+      content:
+        { application/json: { schema: { $ref: "#/components/schemas/CertificateDetailsDTO" } } }
+    Certificate:
+      description: Certificate metadata
+      content: { application/json: { schema: { $ref: "#/components/schemas/CertificateDTO" } } }
+    UserRoleAssignments:
+      description: User role assignment collection
+      content:
+        { application/json: { schema: { $ref: "#/components/schemas/UserRoleAssignmentsDTO" } } }
+    UserRoleAssignment:
+      description: User role assignment
+      content:
+        { application/json: { schema: { $ref: "#/components/schemas/UserRoleAssignmentDTO" } } }
     Problem:
       description: API problem
       content: { application/problem+json: { schema: { $ref: "#/components/schemas/ErrorDTO" } } }
@@ -924,10 +1097,6 @@ components:
       type: object
       required: [title, detail]
       properties: { title: { type: string }, detail: { type: string } }
-    ListEnvelope:
-      type: object
-      required: [value, count]
-      properties: { value: { type: array, items: {} }, count: { type: integer, minimum: 0 } }
     BuildStatus: { type: string, enum: [SCHEDULED, BUILDING, SUCCESS, FAIL, DELETED, UNKNOWN] }
     DeploymentStatus: { type: string, enum: [SCHEDULED, DEPLOYING, DEPLOYED, UNDEPLOYED, FAIL] }
     CreateBuildRequestDTO:
@@ -993,6 +1162,9 @@ components:
     DeploymentModesPerEnvironmentDTO:
       type: object
       properties: { environmentCode: { type: string }, deploymentModes: { type: object } }
+    DeploymentModesDTO:
+      type: array
+      items: { $ref: "#/components/schemas/DeploymentModesPerEnvironmentDTO" }
     CreateDeploymentRequestDTO:
       type: object
       additionalProperties: false
@@ -1045,7 +1217,7 @@ components:
           reason: { type: string },
           decision: { type: string, enum: [ACCEPT, PREPARE_CANARY, REJECT] },
         }
-    DeploymentCancellationRequestDTO:
+    CreateDeploymentCancellationRequestDTO:
       type: object
       additionalProperties: false
       properties: { rollbackDatabase: { type: boolean }, cancelReason: { type: string } }
@@ -1075,3 +1247,456 @@ components:
         k8sService: { type: string }
         k8sServiceVersion: { type: string, enum: [BLUE, GREEN, UNSPECIFIED] }
         access: { type: string, enum: [ALLOW_ALL, DENY_ALL] }
+        description: { type: string }
+        priority: { type: integer, minimum: 0 }
+        proxyTimeOut: { type: integer, minimum: 1 }
+        sslCertificate: { type: string }
+        maintenanceMode: { type: boolean }
+    UpdateEndpointBody:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        domainName: { type: string }
+        protocol: { type: string, enum: [HTTP, HTTPS] }
+        k8sService: { type: string }
+        k8sServiceVersion: { type: string, enum: [BLUE, GREEN, UNSPECIFIED] }
+        access: { type: string, enum: [ALLOW_ALL, DENY_ALL] }
+        description: { type: string }
+        priority: { type: integer, minimum: 0 }
+        proxyTimeOut: { type: integer, minimum: 1 }
+        sslCertificate: { type: string }
+        maintenanceMode: { type: boolean }
+    EndpointDTO:
+      type: object
+      required:
+        [
+          code,
+          name,
+          domainName,
+          protocol,
+          k8sService,
+          k8sServiceVersion,
+          access,
+          webProxy,
+          service,
+          url,
+        ]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        domainName: { type: string }
+        protocol: { type: string, enum: [HTTP, HTTPS] }
+        k8sService: { type: string }
+        k8sServiceVersion: { type: string, enum: [BLUE, GREEN, UNSPECIFIED] }
+        access: { type: string, enum: [ALLOW_ALL, DENY_ALL] }
+        description: { type: string }
+        priority: { type: integer, minimum: 0 }
+        proxyTimeOut: { type: integer, minimum: 1 }
+        sslCertificate: { type: string }
+        maintenanceMode: { type: boolean }
+        webProxy: { type: string, enum: [public, private, nat] }
+        service: { type: string }
+        url: { type: string, format: uri }
+    EndpointDetailsDTO:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: array, items: { $ref: "#/components/schemas/EndpointDTO" } }
+        count: { type: integer, minimum: 0 }
+    DeploymentDecisionDTO:
+      type: object
+      required: [type, subscriptionCode, deploymentCode, createdTimestamp, createdBy]
+      properties:
+        reason: { type: string }
+        type: { type: string, enum: [ACCEPT, PREPARE_CANARY, REJECT] }
+        subscriptionCode: { type: string }
+        deploymentCode: { type: string }
+        createdTimestamp: { type: string, format: date-time }
+        createdBy: { type: string }
+    DeploymentDecisionsDTO:
+      type: object
+      required: [deploymentDecisions]
+      properties:
+        deploymentDecisions:
+          { type: array, items: { $ref: "#/components/schemas/DeploymentDecisionDTO" } }
+    CreateDeploymentDecisionResponseDTO:
+      type: object
+      required: [decision]
+      properties:
+        newDeploymentCode: { type: string }
+        decision: { type: string, enum: [ACCEPT, PREPARE_CANARY, REJECT] }
+    DeploymentCancellationOptionsDTO:
+      type: object
+      required: [databaseRollbackRestoreTimestamp]
+      properties:
+        databaseRollbackRestoreTimestamp: { type: string, format: date-time }
+    UpdateTrafficSplitRequestDTO:
+      type: object
+      additionalProperties: false
+      properties:
+        services:
+          {
+            type: array,
+            maxItems: 50,
+            items: { $ref: "#/components/schemas/TrafficPercentageDTO" },
+          }
+        endpoints:
+          {
+            type: array,
+            maxItems: 50,
+            items: { $ref: "#/components/schemas/TrafficPercentageDTO" },
+          }
+    TrafficSplitDetailDTO:
+      allOf:
+        - { $ref: "#/components/schemas/TrafficSplitDTO" }
+        - type: object
+          required: [deploymentCode]
+          properties:
+            lastModifiedTimestamp: { type: string, format: date-time }
+            lastModifiedBy: { type: string }
+            subscriptionCode: { type: string }
+            deploymentCode: { type: string }
+            code: { type: string }
+    TrafficSplitHistoryListDTO:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: array, items: { $ref: "#/components/schemas/TrafficSplitDetailDTO" } }
+        count: { type: integer, minimum: 0 }
+    EnvironmentDTO:
+      type: object
+      required: [subscriptionCode, name, code, type, status, deploymentStatus]
+      properties:
+        subscriptionCode: { type: string }
+        name: { type: string }
+        code: { type: string }
+        type: { type: string, enum: [DEVELOPMENT, STAGING, PRODUCTION] }
+        status:
+          {
+            type: string,
+            enum: [PROVISIONING, AVAILABLE, TERMINATING, TERMINATED, READY_FOR_DEPLOYMENT],
+          }
+        deploymentStatus: { $ref: "#/components/schemas/DeploymentStatus" }
+    EnvironmentDetailsDTO:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: array, items: { $ref: "#/components/schemas/EnvironmentDTO" } }
+        count: { type: integer, minimum: 0 }
+    DatabackupContentPartDTO:
+      type: object
+      properties: { included: { type: boolean } }
+    DatabackupContentDTO:
+      type: object
+      properties:
+        databasesBackup: { $ref: "#/components/schemas/DatabackupContentPartDTO" }
+        storagesBackup: { $ref: "#/components/schemas/DatabackupContentPartDTO" }
+    CreateDatabackupRequestDTO:
+      type: object
+      additionalProperties: false
+      properties:
+        description: { type: string }
+        databackupType: { type: string }
+        databackupContent: { $ref: "#/components/schemas/DatabackupContentDTO" }
+    CreateDatabackupResponseDTO:
+      type: object
+      required: [databackupCode, subscriptionCode, environmentCode]
+      properties:
+        databackupCode: { type: string }
+        subscriptionCode: { type: string }
+        environmentCode: { type: string }
+    DatabackupDetailDTO:
+      type: object
+      required: [databackupCode, status, databackupType, createdTimestamp]
+      properties:
+        databackupCode: { type: string }
+        name: { type: string }
+        status: { type: string }
+        databackupType: { type: string }
+        databackupDbSupportType: { type: string }
+        description: { type: string }
+        createdBy: { type: string }
+        createdTimestamp: { type: string, format: date-time }
+        canBeRestored: { type: boolean }
+        canBeDeleted: { type: boolean }
+        canBeCanceled: { type: boolean }
+        databackupContent: { $ref: "#/components/schemas/DatabackupContentDTO" }
+    DatabackupDetailsDTO:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: array, items: { $ref: "#/components/schemas/DatabackupDetailDTO" } }
+        count: { type: integer, minimum: 0 }
+    DatabackupStateChangeDTO:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties: { action: { type: string, const: CANCEL } }
+    CreateDatarestoreRequestDTO:
+      type: object
+      additionalProperties: false
+      properties:
+        databackupCode: { type: string }
+        sourceEnvironmentCode: { type: string }
+        restorePointTime: { type: string, format: date-time }
+      anyOf:
+        - { required: [databackupCode] }
+        - { required: [restorePointTime] }
+    CreateDatarestoreResponseDTO:
+      type: object
+      required: [datarestoreCode, subscriptionCode, environmentCode]
+      properties:
+        datarestoreCode: { type: string }
+        subscriptionCode: { type: string }
+        environmentCode: { type: string }
+    DatarestoreDetailDTO:
+      type: object
+      required: [datarestoreCode, status, createdTimestamp]
+      properties:
+        datarestoreCode: { type: string }
+        name: { type: string }
+        status: { type: string }
+        databackupCode: { type: string }
+        createdBy: { type: string }
+        createdTimestamp: { type: string, format: date-time }
+        canBeCanceled: { type: boolean }
+    DatarestoreDetailsDTO:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: array, items: { $ref: "#/components/schemas/DatarestoreDetailDTO" } }
+        count: { type: integer, minimum: 0 }
+    DatarestoreStateChangeDTO:
+      $ref: "#/components/schemas/DatabackupStateChangeDTO"
+    NamedCodeDTO:
+      type: object
+      required: [code]
+      properties: { code: { type: string }, name: { type: string } }
+    KubernetesClusterScalingDTO:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string }
+        maxWorkerCount: { type: integer }
+        workerVmType: { $ref: "#/components/schemas/NamedCodeDTO" }
+    DatabaseSchemaScalingDTO:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string }
+        maxSizeInMb: { type: integer, format: int64 }
+        haReplicaCount: { type: integer }
+        performance: { $ref: "#/components/schemas/NamedCodeDTO" }
+    ServiceScalingDTO:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string }
+        replicas: { type: integer }
+        requestsCpu: { type: string }
+        noLimitsCpu: { type: boolean }
+        requestsMemory: { type: string }
+        memoryScaleFactor: { type: number }
+        storageSize: { type: string }
+        scalingReplicasSupported: { type: boolean }
+        memoryScaleFactorSupported: { type: boolean }
+        autoscaling:
+          type: object
+          required: [enabled]
+          properties:
+            enabled: { type: boolean }
+            minReplicas: { type: integer }
+            maxReplicas: { type: integer }
+    EnvironmentScalingDetailDTO:
+      type: object
+      required: [subscriptionCode, environmentCode]
+      properties:
+        subscriptionCode: { type: string }
+        environmentCode: { type: string }
+        hibernated: { type: boolean }
+        kubernetesClusters:
+          { type: array, items: { $ref: "#/components/schemas/KubernetesClusterScalingDTO" } }
+        databaseSchemas:
+          { type: array, items: { $ref: "#/components/schemas/DatabaseSchemaScalingDTO" } }
+        services: { type: array, items: { $ref: "#/components/schemas/ServiceScalingDTO" } }
+    EnvironmentScalingUpdateDTO:
+      type: object
+      additionalProperties: false
+      properties:
+        hibernated: { type: boolean, deprecated: true }
+        kubernetesClusters:
+          {
+            type: array,
+            maxItems: 20,
+            items: { $ref: "#/components/schemas/KubernetesClusterScalingDTO" },
+          }
+        databaseSchemas:
+          {
+            type: array,
+            maxItems: 20,
+            items: { $ref: "#/components/schemas/DatabaseSchemaScalingDTO" },
+          }
+        services:
+          { type: array, maxItems: 50, items: { $ref: "#/components/schemas/ServiceScalingDTO" } }
+    EnvironmentScalingOptionsDTO:
+      type: object
+      properties:
+        kubernetesClusters:
+          type: array
+          items:
+            type: object
+            required: [code]
+            properties:
+              code: { type: string }
+              options:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    maxWorkerCount: { type: integer }
+                    workerVmType: { $ref: "#/components/schemas/NamedCodeDTO" }
+        databaseSchemas:
+          type: array
+          items:
+            type: object
+            required: [code]
+            properties:
+              code: { type: string }
+              options:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    maxSizesInMb: { type: array, items: { type: integer } }
+                    performance: { $ref: "#/components/schemas/NamedCodeDTO" }
+        services:
+          type: array
+          items:
+            type: object
+            required: [code]
+            properties:
+              code: { type: string }
+              options:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    memoryScaleFactor: { type: array, items: { type: number } }
+    ScheduledActivityStatus:
+      {
+        type: string,
+        enum:
+          [SCHEDULED, QUEUED, QUEUED_AWAITING_LOCK, RUNNING, SUCCESS, ERROR, CANCELING, CANCELED],
+      }
+    CreateScheduledActivityRequestDTO:
+      type: object
+      additionalProperties: false
+      required: [activityType, scheduledTimestamp]
+      properties:
+        activityType: { type: string }
+        scheduledTimestamp: { type: string, format: date-time }
+    UpdateScheduledActivityRequestDTO:
+      type: object
+      additionalProperties: false
+      required: [scheduledTimestamp]
+      properties: { scheduledTimestamp: { type: string, format: date-time } }
+    ScheduledActivityDetailDTO:
+      type: object
+      required: [code, subscriptionCode, environmentCode, activityType, scheduledTimestamp, status]
+      properties:
+        code: { type: string }
+        subscriptionCode: { type: string }
+        environmentCode: { type: string }
+        activityType: { type: string }
+        scheduledTimestamp: { type: string, format: date-time }
+        startedTimestamp: { type: string, format: date-time }
+        finishedTimestamp: { type: string, format: date-time }
+        status: { $ref: "#/components/schemas/ScheduledActivityStatus" }
+        readOnly: { type: boolean }
+        updatable: { type: boolean }
+        cancelable: { type: boolean }
+        createdBy: { type: string }
+        createdTimestamp: { type: string, format: date-time }
+        lastModifiedBy: { type: string }
+        lastModifiedTimestamp: { type: string, format: date-time }
+    ScheduledActivityDetailsDTO:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: array, items: { $ref: "#/components/schemas/ScheduledActivityDetailDTO" } }
+        count: { type: integer, minimum: 0 }
+    ServicePropertyDTO:
+      type: object
+      additionalProperties: false
+      required: [key, value]
+      properties:
+        key: { type: string }
+        value: { type: object, additionalProperties: true }
+        flags: { type: array, items: { type: string } }
+    CreateCertificateRequestDTO:
+      type: object
+      additionalProperties: false
+      required: [name, certificate, certificateKey]
+      properties:
+        name: { type: string }
+        certificate: { type: string, writeOnly: true }
+        certificateKey: { type: string, format: password, writeOnly: true }
+        description: { type: string }
+        caCertificate: { type: string, writeOnly: true }
+    CertificateDTO:
+      type: object
+      required: [code, name, subscriptionCode]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        subscriptionCode: { type: string }
+        domains: { type: array, items: { type: string } }
+        issuer: { type: string }
+        expirationDate: { type: string, format: date-time }
+        description: { type: string }
+        endpoints: { type: array, items: { type: string } }
+    CertificateDetailsDTO:
+      type: object
+      required: [value, count]
+      properties:
+        value: { type: array, items: { $ref: "#/components/schemas/CertificateDTO" } }
+        count: { type: integer, minimum: 0 }
+    RolesDTO:
+      type: array
+      items: { type: string }
+    UserRoleAssignmentDTO:
+      type: object
+      required: [username, role, subscriptionCode, environments]
+      properties:
+        username: { type: string }
+        role: { type: string }
+        subscriptionCode: { type: string }
+        environments: { type: array, items: { type: string } }
+    UserRoleAssignmentsDTO:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/UserRoleAssignmentDTO" } }
+    CreateUserRoleAssignmentDTO:
+      type: object
+      additionalProperties: false
+      required: [username, email, role, environments]
+      properties:
+        username: { type: string }
+        email: { type: string, format: email }
+        role: { type: string }
+        environments: { type: array, maxItems: 20, items: { type: string } }
+    UpdateUserRoleAssignmentDTO:
+      type: object
+      additionalProperties: false
+      required: [username, role, environments]
+      properties:
+        username: { type: string }
+        role: { type: string }
+        environments: { type: array, maxItems: 20, items: { type: string } }
+    DeleteUserRoleAssignmentDTO:
+      type: object
+      additionalProperties: false
+      required: [username, role]
+      properties: { username: { type: string }, role: { type: string } }
