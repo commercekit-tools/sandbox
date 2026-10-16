@@ -39,7 +39,7 @@
   },
 
   "vars": {
-    "ALLOWED_ORIGINS": "https://commercekit.tools",
+    "ALLOWED_ORIGINS": "https://commercekit.tools,http://localhost:5173",
     "MOCK_JWT_ISSUER": "https://ccv2.sandbox.commercekit.tools",
   },
 
