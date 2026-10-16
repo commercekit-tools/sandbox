@@ -103,9 +103,12 @@ provided `Retry-After`, and `5xx` as a bounded retry condition.
 
 ## CORS and browser requests
 
-The production allowlist includes exactly `https://commercekit.tools` unless
-`ALLOWED_ORIGINS` is explicitly configured. Preflight responses allow `GET`,
-`POST`, `PUT`, `PATCH`, `DELETE`, and `OPTIONS`, plus these request headers:
+The deployed allowlist includes exactly `https://commercekit.tools` and the
+CommerceKit Vite development origin `http://localhost:5173`. Override the
+comma-separated `ALLOWED_ORIGINS` value when another exact development origin
+is required; origins do not include a trailing slash. Preflight responses allow
+`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and `OPTIONS`, plus these request
+headers:
 
 - `Authorization`
 - `Content-Type`
