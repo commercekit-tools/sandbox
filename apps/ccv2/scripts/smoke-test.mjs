@@ -5,7 +5,7 @@ import { inflateRawSync } from "node:zlib";
 const DEFAULT_LOCAL_URL = "http://127.0.0.1:8787";
 const PRODUCTION_URL = "https://ccv2.sandbox.commercekit.tools";
 const DEFAULT_TIMEOUT_MS = 10_000;
-const SUBSCRIPTION = "SUBSCRIPTION_001";
+const SUBSCRIPTION = "131762872233634f29fdeb7d50983aa4";
 
 function parseArguments(argv) {
   const options = {
@@ -152,7 +152,7 @@ async function deleteRun(run) {
 }
 
 async function createBuild(run, token, name) {
-  return jsonRequest(
+  const build = await jsonRequest(
     `/v2/subscriptions/${SUBSCRIPTION}/builds`,
     {
       method: "POST",
@@ -161,6 +161,12 @@ async function createBuild(run, token, name) {
     },
     201,
   );
+  assert(/^\d{8}\.\d+$/.test(build.code), "Build creation returned an invalid build code.");
+  assert(
+    build.subscriptionCode === SUBSCRIPTION,
+    "Build creation returned the wrong subscription.",
+  );
+  return build;
 }
 
 async function pollBuild(run, token, code, expected, attempts = 4) {
@@ -176,7 +182,7 @@ async function pollBuild(run, token, code, expected, attempts = 4) {
 }
 
 async function createDeployment(run, token, buildCode, strategy = "ROLLING_UPDATE") {
-  return jsonRequest(
+  const deployment = await jsonRequest(
     `/v2/subscriptions/${SUBSCRIPTION}/deployments`,
     {
       method: "POST",
@@ -190,6 +196,12 @@ async function createDeployment(run, token, buildCode, strategy = "ROLLING_UPDAT
     },
     201,
   );
+  assert(/^\d{6,}$/.test(deployment.code), "Deployment creation returned an invalid code.");
+  assert(
+    deployment.subscriptionCode === SUBSCRIPTION,
+    "Deployment creation returned the wrong subscription.",
+  );
+  return deployment;
 }
 
 async function pollDeployment(run, token, code, expected, attempts = 5) {

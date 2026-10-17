@@ -21,6 +21,11 @@ or Scalar assets.
 | Public signing keys   | `GET /.well-known/jwks.json`                   | None                                                  |
 | Management operations | `/v2/subscriptions/{subscriptionCode}/...`     | Synthetic access token in `x-approuter-authorization` |
 
+Use the synthetic subscription code `131762872233634f29fdeb7d50983aa4` for
+Management API paths. Build codes use the production-shaped `YYYYMMDD.N` form,
+and deployment codes are numeric strings. Always retain the code returned by a
+create response instead of deriving the next value in browser code.
+
 ## Run and authorization flow
 
 Create a run and retain the returned values only for the active browser session:

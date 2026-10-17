@@ -10,6 +10,16 @@ The compatibility contract is independently authored. SAP's official
 documentation remains the authority:
 [Cloud Portal API](https://help.sap.com/docs/SAP_COMMERCE_CLOUD_PUBLIC_CLOUD/0fa6bcf4736c46f78c248512391eb467/66abfe678b55457fab235ce8039dda71.html?locale=en-US).
 
+The sandbox uses synthetic identifiers shaped like Cloud Portal values:
+
+- subscription: `131762872233634f29fdeb7d50983aa4`;
+- builds: UTC creation date plus daily sequence, such as `20261016.1`;
+- deployments: numeric codes beginning at `700001` within each isolated run.
+
+Clients must use codes returned by create operations rather than constructing
+them. The older `SUBSCRIPTION_001` value is accepted only during the website
+rollout so browser sessions opened against the previous contract can finish.
+
 ## Local setup
 
 ```bash
@@ -61,7 +71,7 @@ curl --fail --silent --show-error -X PUT "$BASE_URL/sandbox/v1/runs/$RUN_ID/scen
 
 # 4. Create a build.
 BUILD_JSON="$(curl --fail --silent --show-error -X POST \
-  "$BASE_URL/v2/subscriptions/SUBSCRIPTION_001/builds" \
+  "$BASE_URL/v2/subscriptions/131762872233634f29fdeb7d50983aa4/builds" \
   -H "x-approuter-authorization: Bearer $ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
   --data '{"branch":"main","name":"sandbox-release","applicationCode":"commerce"}')"
@@ -70,19 +80,19 @@ BUILD_CODE="$(jq -r .code <<<"$BUILD_JSON")"
 # 5. Poll three times: BUILDING, BUILDING, SUCCESS.
 for _ in 1 2 3; do
   curl --fail --silent --show-error \
-    "$BASE_URL/v2/subscriptions/SUBSCRIPTION_001/builds/$BUILD_CODE/progress" \
+    "$BASE_URL/v2/subscriptions/131762872233634f29fdeb7d50983aa4/builds/$BUILD_CODE/progress" \
     -H "x-approuter-authorization: Bearer $ACCESS_TOKEN" | jq .
 done
 
 # 6. Download a valid ZIP log archive.
 curl --fail --silent --show-error \
-  "$BASE_URL/v2/subscriptions/SUBSCRIPTION_001/builds/$BUILD_CODE/logs" \
+  "$BASE_URL/v2/subscriptions/131762872233634f29fdeb7d50983aa4/builds/$BUILD_CODE/logs" \
   -H "x-approuter-authorization: Bearer $ACCESS_TOKEN" \
   --output "$BUILD_CODE-logs.zip"
 
 # 7. Create a deployment.
 DEPLOYMENT_JSON="$(curl --fail --silent --show-error -X POST \
-  "$BASE_URL/v2/subscriptions/SUBSCRIPTION_001/deployments" \
+  "$BASE_URL/v2/subscriptions/131762872233634f29fdeb7d50983aa4/deployments" \
   -H "x-approuter-authorization: Bearer $ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
   --data "{\"buildCode\":\"$BUILD_CODE\",\"environmentCode\":\"d1\",\"databaseUpdateMode\":\"UPDATE\",\"strategy\":\"ROLLING_UPDATE\"}")"
@@ -91,7 +101,7 @@ DEPLOYMENT_CODE="$(jq -r .code <<<"$DEPLOYMENT_JSON")"
 # 8. Poll three times: DEPLOYING, DEPLOYING, DEPLOYED.
 for _ in 1 2 3; do
   curl --fail --silent --show-error \
-    "$BASE_URL/v2/subscriptions/SUBSCRIPTION_001/deployments/$DEPLOYMENT_CODE/progress" \
+    "$BASE_URL/v2/subscriptions/131762872233634f29fdeb7d50983aa4/deployments/$DEPLOYMENT_CODE/progress" \
     -H "x-approuter-authorization: Bearer $ACCESS_TOKEN" | jq .
 done
 

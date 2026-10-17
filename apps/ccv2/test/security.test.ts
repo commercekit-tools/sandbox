@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { createRun, issueToken, sapHeaders } from "./helpers";
 
-const builds = "https://example.com/v2/subscriptions/SUBSCRIPTION_001/builds";
+const builds = "https://example.com/v2/subscriptions/131762872233634f29fdeb7d50983aa4/builds";
 
 async function customToken(
   runId: string,

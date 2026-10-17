@@ -168,7 +168,7 @@ describe("run control and synthetic OAuth", () => {
     );
     expect(response.status).toBe(404);
     const vendorResponse = await worker.default.fetch(
-      "https://example.com/v2/subscriptions/SUBSCRIPTION_001/builds",
+      "https://example.com/v2/subscriptions/131762872233634f29fdeb7d50983aa4/builds",
       { headers: { "x-approuter-authorization": `Bearer ${token}` } },
     );
     expect(vendorResponse.status).toBe(401);

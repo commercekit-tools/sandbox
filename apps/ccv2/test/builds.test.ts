@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SCENARIO } from "../src/domain/scenario";
 import { configureScenario, controlHeaders, createRun, issueToken, sapHeaders } from "./helpers";
 
-const base = "https://example.com/v2/subscriptions/SUBSCRIPTION_001/builds";
+const base = "https://example.com/v2/subscriptions/131762872233634f29fdeb7d50983aa4/builds";
 
 async function createBuild(token: string, body: unknown = { branch: "main", name: "release" }) {
   return worker.default.fetch(base, {
@@ -15,6 +15,17 @@ async function createBuild(token: string, body: unknown = { branch: "main", name
 }
 
 describe("SAP-compatible build API", () => {
+  it("accepts the previous subscription code during the website rollout", async () => {
+    const run = await createRun();
+    const token = await issueToken(run);
+    const response = await worker.default.fetch(
+      "https://example.com/v2/subscriptions/SUBSCRIPTION_001/builds",
+      { headers: sapHeaders(token) },
+    );
+
+    expect(response.status).toBe(200);
+  });
+
   it("creates, lists, retrieves, progresses, logs, and deletes a build", async () => {
     const run = await createRun();
     const token = await issueToken(run);
@@ -25,7 +36,8 @@ describe("SAP-compatible build API", () => {
     });
     expect(creation.status).toBe(201);
     const created = await creation.json<{ code: string; subscriptionCode: string }>();
-    expect(created).toEqual({ code: "build_000001", subscriptionCode: "SUBSCRIPTION_001" });
+    expect(created.code).toMatch(/^\d{8}\.1$/);
+    expect(created.subscriptionCode).toBe("131762872233634f29fdeb7d50983aa4");
 
     const detailBeforePoll = await worker.default.fetch(`${base}/${created.code}`, {
       headers: sapHeaders(token),

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SCENARIO } from "../src/domain/scenario";
 import { configureScenario, createRun, issueToken, sapHeaders, type CreatedRun } from "./helpers";
 
-const subscription = "https://example.com/v2/subscriptions/SUBSCRIPTION_001";
+const subscription = "https://example.com/v2/subscriptions/131762872233634f29fdeb7d50983aa4";
 
 async function successfulBuild(run: CreatedRun, token: string): Promise<string> {
   await configureScenario(run, {
@@ -69,7 +69,11 @@ describe("SAP-compatible deployment API", () => {
 
     const creation = await createDeployment(token, buildCode);
     expect(creation.status).toBe(201);
-    const deployment = await creation.json<{ code: string }>();
+    const deployment = await creation.json<{ code: string; subscriptionCode: string }>();
+    expect(deployment).toEqual({
+      code: "700001",
+      subscriptionCode: "131762872233634f29fdeb7d50983aa4",
+    });
     const observed = await worker.default.fetch(`${subscription}/deployments/${deployment.code}`, {
       headers: sapHeaders(token),
     });

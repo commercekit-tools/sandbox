@@ -925,13 +925,31 @@ components:
       description: "Bearer <synthetic RS256 access token>"
   parameters:
     SubscriptionCode:
-      { name: subscriptionCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+      {
+        name: subscriptionCode,
+        in: path,
+        required: true,
+        schema: { type: string, maxLength: 100 },
+        example: "131762872233634f29fdeb7d50983aa4",
+      }
     EnvironmentCode:
       { name: environmentCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
     BuildCode:
-      { name: buildCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+      {
+        name: buildCode,
+        in: path,
+        required: true,
+        schema: { type: string, maxLength: 100 },
+        example: "20261016.1",
+      }
     DeploymentCode:
-      { name: deploymentCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
+      {
+        name: deploymentCode,
+        in: path,
+        required: true,
+        schema: { type: string, maxLength: 100 },
+        example: "700001",
+      }
     EndpointCode:
       { name: endpointCode, in: path, required: true, schema: { type: string, maxLength: 100 } }
     DatabackupCode:
@@ -1108,7 +1126,9 @@ components:
     CreateBuildResponseDTO:
       type: object
       required: [code, subscriptionCode]
-      properties: { code: { type: string }, subscriptionCode: { type: string } }
+      properties:
+        code: { type: string, example: "20261016.1" }
+        subscriptionCode: { type: string, example: "131762872233634f29fdeb7d50983aa4" }
     BuildDetailDTO:
       type: object
       required:
@@ -1126,11 +1146,11 @@ components:
           properties,
         ]
       properties:
-        subscriptionCode: { type: string }
+        subscriptionCode: { type: string, example: "131762872233634f29fdeb7d50983aa4" }
         applicationCode: { type: string }
         branch: { type: string }
         name: { type: string }
-        code: { type: string }
+        code: { type: string, example: "20261016.1" }
         buildStartTimestamp: { type: string, format: date-time }
         buildEndTimestamp: { type: string, format: date-time }
         buildVersion: { type: string }
@@ -1153,7 +1173,7 @@ components:
       required: [subscriptionCode, buildCode, numberOfTasks, percentage, buildStatus, startedTasks]
       properties:
         subscriptionCode: { type: string }
-        buildCode: { type: string }
+        buildCode: { type: string, example: "20261016.1" }
         errorMessage: { type: string }
         numberOfTasks: { type: integer }
         percentage: { type: integer, minimum: 0, maximum: 100 }
@@ -1170,22 +1190,24 @@ components:
       additionalProperties: false
       required: [buildCode, environmentCode, databaseUpdateMode, strategy]
       properties:
-        buildCode: { type: string }
+        buildCode: { type: string, example: "20261016.1" }
         environmentCode: { type: string }
         databaseUpdateMode: { type: string, enum: [NONE, UPDATE, INITIALIZE] }
         strategy: { type: string, enum: [ROLLING_UPDATE, RECREATE, GREEN] }
     CreateDeploymentResponseDTO:
       type: object
       required: [code, subscriptionCode]
-      properties: { code: { type: string }, subscriptionCode: { type: string } }
+      properties:
+        code: { type: string, example: "700001" }
+        subscriptionCode: { type: string, example: "131762872233634f29fdeb7d50983aa4" }
     DeploymentDetailDTO:
       type: object
       required:
         [code, subscriptionCode, buildCode, environmentCode, databaseUpdateMode, strategy, status]
       properties:
-        code: { type: string }
-        subscriptionCode: { type: string }
-        buildCode: { type: string }
+        code: { type: string, example: "700001" }
+        subscriptionCode: { type: string, example: "131762872233634f29fdeb7d50983aa4" }
+        buildCode: { type: string, example: "20261016.1" }
         environmentCode: { type: string }
         databaseUpdateMode: { type: string, enum: [NONE, UPDATE, INITIALIZE] }
         strategy: { type: string, enum: [ROLLING_UPDATE, RECREATE, GREEN] }
@@ -1204,7 +1226,7 @@ components:
       required: [subscriptionCode, deploymentCode, deploymentStatus, percentage, stages]
       properties:
         subscriptionCode: { type: string }
-        deploymentCode: { type: string }
+        deploymentCode: { type: string, example: "700001" }
         deploymentStatus: { $ref: "#/components/schemas/DeploymentStatus" }
         percentage: { type: integer, minimum: 0, maximum: 100 }
         stages: { type: array, items: { type: object } }

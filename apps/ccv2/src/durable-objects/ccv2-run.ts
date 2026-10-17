@@ -19,7 +19,12 @@ import type {
   TrafficSplitHistoryEntry,
   TrafficSplitRequest,
 } from "../domain/deployment";
-import { environmentExists, ENVIRONMENTS, SUBSCRIPTION_CODE } from "../domain/fixtures";
+import {
+  environmentExists,
+  ENVIRONMENTS,
+  LEGACY_SUBSCRIPTION_CODE,
+  SUBSCRIPTION_CODE,
+} from "../domain/fixtures";
 import type {
   OperationFault,
   RunInitialization,
@@ -318,8 +323,12 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
     if (count >= 100) {
       return this.failure(429, "build_quota_exceeded", "This run already contains 100 builds.");
     }
-    const code = `build_${String(count + 1).padStart(6, "0")}`;
     const now = new Date().toISOString();
+    const buildDate = now.slice(0, 10).replaceAll("-", "");
+    const dailyBuildCount = this.ctx.storage.sql
+      .exec<CountRow>("SELECT COUNT(*) AS count FROM builds WHERE code LIKE ?", `${buildDate}.%`)
+      .one().count;
+    const code = `${buildDate}.${String(dailyBuildCount + 1)}`;
     const detail: BuildDetail = {
       subscriptionCode,
       branch: request.branch,
@@ -588,7 +597,7 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
         "This run already contains 100 deployments.",
       );
     }
-    const code = `deployment_${String(deployments.length + 1).padStart(6, "0")}`;
+    const code = String(700_001 + deployments.length);
     const now = new Date().toISOString();
     const previous = deployments
       .map((row) => this.deploymentDetail(row))
@@ -1662,7 +1671,9 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
   }
 
   private checkSubscription<T>(subscriptionCode: string): RunResult<T> | undefined {
-    if (subscriptionCode === SUBSCRIPTION_CODE) return undefined;
+    if (subscriptionCode === SUBSCRIPTION_CODE || subscriptionCode === LEGACY_SUBSCRIPTION_CODE) {
+      return undefined;
+    }
     return this.failure(404, "subscription_not_found", "The subscription was not found.");
   }
 
