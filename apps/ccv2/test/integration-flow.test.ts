@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SCENARIO } from "../src/domain/scenario";
 import { configureScenario, controlHeaders, createRun, issueToken, sapHeaders } from "./helpers";
 
-const subscription = "https://example.com/v2/subscriptions/SUBSCRIPTION_001";
+const subscription = "https://example.com/v2/subscriptions/131762872233634f29fdeb7d50983aa4";
 
 describe("complete Worker-runtime integration flows", () => {
   it("runs a successful build and deployment from run creation through deletion", async () => {

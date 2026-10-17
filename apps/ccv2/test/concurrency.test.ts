@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SCENARIO } from "../src/domain/scenario";
 import { configureScenario, controlHeaders, createRun, issueToken, sapHeaders } from "./helpers";
 
-const subscription = "https://example.com/v2/subscriptions/SUBSCRIPTION_001";
+const subscription = "https://example.com/v2/subscriptions/131762872233634f29fdeb7d50983aa4";
 
 function createBuild(token: string, index: number): Promise<Response> {
   return worker.default.fetch(`${subscription}/builds`, {
@@ -29,6 +29,9 @@ describe("Durable Object concurrency and persistence", () => {
       creations.map((response) => response.json<{ code: string }>()),
     );
     expect(new Set(builds.map(({ code }) => code)).size).toBe(2);
+    const buildCodes = builds.map(({ code }) => code).toSorted();
+    expect(buildCodes[0]).toMatch(/^\d{8}\.1$/);
+    expect(buildCodes[1]).toMatch(/^\d{8}\.2$/);
 
     const target = builds[0];
     if (!target) throw new Error("Concurrent build creation returned no build");

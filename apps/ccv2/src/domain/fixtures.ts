@@ -1,4 +1,5 @@
-export const SUBSCRIPTION_CODE = "SUBSCRIPTION_001";
+/** Synthetic, production-shaped subscription code used by every sandbox run. */
+export const SUBSCRIPTION_CODE = "131762872233634f29fdeb7d50983aa4";
 
 export const ENVIRONMENTS = [
   {

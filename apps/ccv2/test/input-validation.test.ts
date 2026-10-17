@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SCENARIO } from "../src/domain/scenario";
 import { controlHeaders, createRun, issueToken, sapHeaders } from "./helpers";
 
-const subscription = "https://example.com/v2/subscriptions/SUBSCRIPTION_001";
+const subscription = "https://example.com/v2/subscriptions/131762872233634f29fdeb7d50983aa4";
 
 describe("public input validation", () => {
   it("rejects malformed bodies, media types, paging, enums, duplicates, and invalid scopes", async () => {
