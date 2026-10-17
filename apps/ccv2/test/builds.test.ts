@@ -15,7 +15,7 @@ async function createBuild(token: string, body: unknown = { branch: "main", name
 }
 
 describe("SAP-compatible build API", () => {
-  it("accepts the previous subscription code during the website rollout", async () => {
+  it("rejects the retired placeholder subscription code", async () => {
     const run = await createRun();
     const token = await issueToken(run);
     const response = await worker.default.fetch(
@@ -23,7 +23,11 @@ describe("SAP-compatible build API", () => {
       { headers: sapHeaders(token) },
     );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      title: "Not Found",
+      detail: "The subscription was not found.",
+    });
   });
 
   it("creates, lists, retrieves, progresses, logs, and deletes a build", async () => {

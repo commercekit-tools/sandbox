@@ -19,12 +19,7 @@ import type {
   TrafficSplitHistoryEntry,
   TrafficSplitRequest,
 } from "../domain/deployment";
-import {
-  environmentExists,
-  ENVIRONMENTS,
-  LEGACY_SUBSCRIPTION_CODE,
-  SUBSCRIPTION_CODE,
-} from "../domain/fixtures";
+import { environmentExists, ENVIRONMENTS, SUBSCRIPTION_CODE } from "../domain/fixtures";
 import type {
   OperationFault,
   RunInitialization,
@@ -1671,9 +1666,7 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
   }
 
   private checkSubscription<T>(subscriptionCode: string): RunResult<T> | undefined {
-    if (subscriptionCode === SUBSCRIPTION_CODE || subscriptionCode === LEGACY_SUBSCRIPTION_CODE) {
-      return undefined;
-    }
+    if (subscriptionCode === SUBSCRIPTION_CODE) return undefined;
     return this.failure(404, "subscription_not_found", "The subscription was not found.");
   }
 

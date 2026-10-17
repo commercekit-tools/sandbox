@@ -17,8 +17,7 @@ The sandbox uses synthetic identifiers shaped like Cloud Portal values:
 - deployments: numeric codes beginning at `700001` within each isolated run.
 
 Clients must use codes returned by create operations rather than constructing
-them. The older `SUBSCRIPTION_001` value is accepted only during the website
-rollout so browser sessions opened against the previous contract can finish.
+them.
 
 ## Local setup
 
