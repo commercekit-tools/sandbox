@@ -91,11 +91,11 @@ describe("SAP-compatible build API", () => {
       method: "DELETE",
       headers: sapHeaders(token),
     });
-    expect(deletion.status).toBe(204);
+    expect(deletion.status).toBe(409);
     const deleted = await worker.default.fetch(`${base}/${created.code}`, {
       headers: sapHeaders(token),
     });
-    await expect(deleted.json()).resolves.toMatchObject({ status: "DELETED" });
+    await expect(deleted.json()).resolves.toMatchObject({ status: "SUCCESS", hasSnapshot: true });
   });
 
   it("supports failed and nonterminating scenario snapshots", async () => {

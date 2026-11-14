@@ -166,8 +166,8 @@ const sandboxOperations = Object.entries(sandboxDocument.paths).flatMap(([route,
     )
     .map(([method, operation]) => ({ method, operationId: operation.operationId, route })),
 );
-if (sandboxOperations.length !== 10) {
-  throw new Error(`Expected 10 sandbox operations, found ${String(sandboxOperations.length)}`);
+if (sandboxOperations.length !== 11) {
+  throw new Error(`Expected 11 sandbox operations, found ${String(sandboxOperations.length)}`);
 }
 const invalidSandboxRoute = sandboxOperations.find(
   ({ route }) =>

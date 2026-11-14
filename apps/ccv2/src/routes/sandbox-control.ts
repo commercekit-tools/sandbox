@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 
 import { randomHex, randomSecret, secretVerifier } from "../auth/crypto";
 import { RUN_ID_PATTERN, RUN_LIFETIME_MS, type RunResult } from "../domain/run";
+import { cleanupFixtureSchema } from "../domain/cleanup-fixture";
 import { parseScenario } from "../domain/scenario";
 import { bearerToken, controlError, readJsonBody, RequestProblem, jsonResponse } from "../http";
 import type { AppEnvironment } from "../types";
@@ -144,4 +145,21 @@ sandboxControlRoutes.post("/sandbox/v1/runs/:runId/reset", async (context) => {
   if (verifier instanceof Response) return verifier;
   const result = await stubFor(context, runId).reset(verifier);
   return result.ok ? jsonResponse(result.value) : resultResponse(result);
+});
+
+sandboxControlRoutes.put("/sandbox/v1/runs/:runId/cleanup-fixture", async (context) => {
+  const { runId } = context.req.param();
+  const verifier = await controlVerifier(context, runId);
+  if (verifier instanceof Response) return verifier;
+  try {
+    const fixture = cleanupFixtureSchema.parse(await readJsonBody(context));
+    const result = await stubFor(context, runId).seedCleanupFixture(verifier, fixture);
+    return result.ok ? jsonResponse(result.value) : resultResponse(result);
+  } catch (error) {
+    if (error instanceof RequestProblem)
+      return controlError(error.status, error.code, error.message);
+    if (error instanceof ZodError)
+      return controlError(400, "invalid_fixture", "Invalid cleanup fixture.");
+    throw error;
+  }
 });

@@ -74,6 +74,29 @@ paths:
           "400": { $ref: "#/components/responses/ControlError" },
           default: { $ref: "#/components/responses/ControlError" },
         }
+  /sandbox/v1/runs/{runId}/cleanup-fixture:
+    parameters: [{ $ref: "#/components/parameters/RunId" }]
+    put:
+      operationId: seedCleanupFixture
+      security: [{ RunControl: [] }]
+      description: Replace isolated build/deployment inventory and install cleanup-only simulation controls. No SAP DTO extension.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CleanupFixture" }
+      responses:
+        "200":
+          description: Fixture installed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [builds, deployments]
+                properties:
+                  builds: { type: integer, minimum: 0 }
+                  deployments: { type: integer, minimum: 0 }
+        default: { $ref: "#/components/responses/ControlError" }
   /sandbox/v1/runs/{runId}/state:
     parameters: [{ $ref: "#/components/parameters/RunId" }]
     get:
@@ -327,3 +350,51 @@ components:
           type: object
           required: [code, message]
           properties: { code: { type: string }, message: { type: string } }
+    CleanupFixture:
+      type: object
+      additionalProperties: false
+      required: [builds]
+      properties:
+        builds:
+          type: array
+          maxItems: 150
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, response]
+            properties:
+              code: { type: string, pattern: "^[A-Za-z0-9_-]{1,100}$" }
+              response: { type: object, additionalProperties: true }
+              modifiedAt:
+                {
+                  type: string,
+                  format: date-time,
+                  description: Internal simulation metadata; never returned by SAP-shaped reads.,
+                }
+        deployments:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, response]
+            properties:
+              code: { type: string, pattern: "^[A-Za-z0-9_-]{1,100}$" }
+              response: { type: object, additionalProperties: true }
+        changes:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            additionalProperties: false
+            required: [operationId, onCall, buildCode]
+            properties:
+              operationId: { type: string, enum: [getBuilds, getBuild, deleteBuild] }
+              onCall: { type: integer, minimum: 1, maximum: 1000 }
+              buildCode: { type: string, pattern: "^[A-Za-z0-9_-]{1,100}$" }
+              patch: { type: object, additionalProperties: true }
+              remove: { type: boolean }
+        loseDeleteResponse:
+          type: array
+          maxItems: 20
+          items: { type: string, pattern: "^[A-Za-z0-9_-]{1,100}$" }

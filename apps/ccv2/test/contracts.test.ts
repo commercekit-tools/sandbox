@@ -58,7 +58,7 @@ describe("published API contracts", () => {
         )
         .map(([method, operation]) => ({ method, operation, path })),
     );
-    expect(operations).toHaveLength(10);
+    expect(operations).toHaveLength(11);
     for (const { method, operation, path } of operations) {
       const honoPath = path.replaceAll(/\{([^}]+)\}/g, ":$1");
       expect(routes, operation.operationId).toContain(`${method.toUpperCase()} ${honoPath}`);
