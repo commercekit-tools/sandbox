@@ -27,8 +27,8 @@ describe("cleanup control fixtures", () => {
           headers: { ...controlHeaders(run), "Content-Type": "application/json" },
           body: JSON.stringify({
             builds: Array.from({ length: 105 }, (_, index) => ({
-              code: `b${index}`,
-              response: build(`b${index}`),
+              code: `b${String(index)}`,
+              response: build(`b${String(index)}`),
             })),
           }),
         },

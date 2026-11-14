@@ -33,6 +33,11 @@ import { DEFAULT_SCENARIO, type Scenario } from "../domain/scenario";
 const SCHEMA_VERSION = 3;
 const MAX_EVENTS = 200;
 
+// Control-plane fixtures can deliberately omit flags despite the production DTO type.
+function explicitlyFalse(value: unknown): boolean {
+  return value === false;
+}
+
 export interface RunMetadata {
   runId: string;
   createdAt: string;
@@ -511,10 +516,10 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
     if (detail.status !== "SUCCESS" && detail.status !== "FAIL") {
       return this.failure(409, "build_in_progress", "A build in progress cannot be deleted.");
     }
-    if (detail.deployed !== false) {
+    if (!explicitlyFalse(detail.deployed)) {
       return this.failure(409, "build_in_use", "A deployed build cannot be deleted.");
     }
-    if (detail.hasSnapshot !== false)
+    if (!explicitlyFalse(detail.hasSnapshot))
       return this.failure(409, "build_has_snapshot", "A build with a snapshot cannot be deleted.");
     if (
       this.deploymentRows(subscriptionCode).some((deployment) => {
@@ -1452,11 +1457,13 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
           "INSERT INTO deployments (code, subscription_code, environment_code, build_code, state_json, scenario_json, poll_count, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
           item.code,
           SUBSCRIPTION_CODE,
-          String(detail.environmentCode ?? "d1"),
-          String(detail.buildCode ?? ""),
+          typeof detail.environmentCode === "string" ? detail.environmentCode : "d1",
+          typeof detail.buildCode === "string" ? detail.buildCode : "",
           JSON.stringify(detail),
           JSON.stringify(DEFAULT_SCENARIO.deployment),
-          String(detail.createdTimestamp ?? "2000-01-01T00:00:00.000Z"),
+          typeof detail.createdTimestamp === "string"
+            ? detail.createdTimestamp
+            : "2000-01-01T00:00:00.000Z",
         );
       }
       this.ctx.storage.sql.exec(
