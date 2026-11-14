@@ -55,6 +55,18 @@ buildRoutes.delete("/v2/subscriptions/:subscriptionCode/builds/:buildCode", asyn
     context.req.param("subscriptionCode"),
     context.req.param("buildCode"),
   );
+  if (
+    result.ok &&
+    (await context.env.CCV2_RUN.getByName(context.get("runId")).consumeCleanupDeleteResponseFault(
+      context.req.param("buildCode"),
+    ))
+  ) {
+    return vendorProblem(
+      500,
+      "Simulated response loss",
+      "Deletion accepted before simulated response loss.",
+    );
+  }
   return result.ok
     ? new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } })
     : vendorError(result);

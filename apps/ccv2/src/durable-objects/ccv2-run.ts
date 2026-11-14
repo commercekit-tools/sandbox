@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
+import type { CleanupFixture } from "../domain/cleanup-fixture";
 import { timingSafeTextEqual } from "../auth/crypto";
 import type {
   BuildDetail,
@@ -507,12 +508,40 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
     const row = this.buildRow(subscriptionCode, buildCode);
     if (!row) return this.failure(404, "build_not_found", "The build was not found.");
     const detail = this.buildDetail(row);
-    if (detail.status === "SCHEDULED" || detail.status === "BUILDING") {
+    if (detail.status !== "SUCCESS" && detail.status !== "FAIL") {
       return this.failure(409, "build_in_progress", "A build in progress cannot be deleted.");
     }
-    if (detail.deployed) {
+    if (detail.deployed !== false) {
       return this.failure(409, "build_in_use", "A deployed build cannot be deleted.");
     }
+    if (detail.hasSnapshot !== false)
+      return this.failure(409, "build_has_snapshot", "A build with a snapshot cannot be deleted.");
+    if (
+      this.deploymentRows(subscriptionCode).some((deployment) => {
+        const reference = this.deploymentDetail(deployment);
+        return (
+          reference.buildCode === buildCode &&
+          ["SCHEDULED", "DEPLOYING", "DEPLOYED"].includes(reference.status)
+        );
+      })
+    )
+      return this.failure(
+        409,
+        "build_deployment_reference",
+        "The build is referenced by an operational deployment.",
+      );
+    const modification = this.ctx.storage.sql
+      .exec<ResourceRow>(
+        "SELECT code, state_json, created_at FROM resources WHERE kind = 'cleanup-modification' AND code = ?",
+        buildCode,
+      )
+      .toArray()[0];
+    if (modification) {
+      const { modifiedAt } = JSON.parse(modification.state_json) as { modifiedAt: string };
+      if (Date.now() - Date.parse(modifiedAt) <= 4 * 60 * 60 * 1000)
+        return this.failure(409, "build_recently_modified", "The build was recently modified.");
+    }
+    // A DELETED record remains observable: the deletion request has been initiated.
     detail.status = "DELETED";
     this.ctx.storage.sql.exec(
       "UPDATE builds SET state_json = ? WHERE code = ?",
@@ -1384,6 +1413,114 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
     return { ok: true, value: null };
   }
 
+  async seedCleanupFixture(
+    controlTokenHash: string,
+    fixture: CleanupFixture,
+  ): Promise<RunResult<{ builds: number; deployments: number }>> {
+    const authorization = await this.authorizeControl(controlTokenHash);
+    if (!authorization.ok) return authorization;
+    this.ctx.storage.transactionSync(() => {
+      this.ctx.storage.sql.exec("DELETE FROM builds");
+      this.ctx.storage.sql.exec("DELETE FROM deployments");
+      this.ctx.storage.sql.exec("DELETE FROM operation_counters");
+      this.ctx.storage.sql.exec("DELETE FROM resources WHERE kind LIKE 'cleanup-%'");
+      for (const item of fixture.builds) {
+        const timestamp =
+          typeof item.response.buildStartTimestamp === "string"
+            ? item.response.buildStartTimestamp
+            : "2000-01-01T00:00:00.000Z";
+        this.ctx.storage.sql.exec(
+          "INSERT INTO builds (code, subscription_code, state_json, scenario_json, poll_count, created_at) VALUES (?, ?, ?, ?, 0, ?)",
+          item.code,
+          SUBSCRIPTION_CODE,
+          JSON.stringify(item.response),
+          JSON.stringify(DEFAULT_SCENARIO.build),
+          timestamp,
+        );
+        if (item.modifiedAt)
+          this.ctx.storage.sql.exec(
+            "INSERT INTO resources (kind, subscription_code, code, state_json, created_at) VALUES ('cleanup-modification', ?, ?, ?, ?)",
+            SUBSCRIPTION_CODE,
+            item.code,
+            JSON.stringify({ modifiedAt: item.modifiedAt }),
+            timestamp,
+          );
+      }
+      for (const item of fixture.deployments) {
+        const detail = item.response;
+        this.ctx.storage.sql.exec(
+          "INSERT INTO deployments (code, subscription_code, environment_code, build_code, state_json, scenario_json, poll_count, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
+          item.code,
+          SUBSCRIPTION_CODE,
+          String(detail.environmentCode ?? "d1"),
+          String(detail.buildCode ?? ""),
+          JSON.stringify(detail),
+          JSON.stringify(DEFAULT_SCENARIO.deployment),
+          String(detail.createdTimestamp ?? "2000-01-01T00:00:00.000Z"),
+        );
+      }
+      this.ctx.storage.sql.exec(
+        "INSERT INTO resources (kind, subscription_code, code, state_json, created_at) VALUES ('cleanup-controls', ?, 'controls', ?, ?)",
+        SUBSCRIPTION_CODE,
+        JSON.stringify({
+          changes: fixture.changes,
+          loseDeleteResponse: fixture.loseDeleteResponse,
+        }),
+        new Date().toISOString(),
+      );
+    });
+    return {
+      ok: true,
+      value: { builds: fixture.builds.length, deployments: fixture.deployments.length },
+    };
+  }
+
+  consumeCleanupDeleteResponseFault(buildCode: string): boolean {
+    const row = this.ctx.storage.sql
+      .exec<ResourceRow>(
+        "SELECT code, state_json, created_at FROM resources WHERE kind = 'cleanup-controls'",
+      )
+      .toArray()[0];
+    if (!row) return false;
+    const controls = JSON.parse(row.state_json) as Pick<
+      CleanupFixture,
+      "changes" | "loseDeleteResponse"
+    >;
+    return controls.loseDeleteResponse.includes(buildCode);
+  }
+
+  private applyCleanupChanges(operationId: string, resourceIdentifier: string, call: number): void {
+    const row = this.ctx.storage.sql
+      .exec<ResourceRow>(
+        "SELECT code, state_json, created_at FROM resources WHERE kind = 'cleanup-controls'",
+      )
+      .toArray()[0];
+    if (!row) return;
+    const controls = JSON.parse(row.state_json) as Pick<
+      CleanupFixture,
+      "changes" | "loseDeleteResponse"
+    >;
+    for (const change of controls.changes) {
+      if (
+        change.operationId !== operationId ||
+        change.onCall !== call ||
+        (operationId !== "getBuilds" && change.buildCode !== resourceIdentifier)
+      )
+        continue;
+      if (change.remove) {
+        this.ctx.storage.sql.exec("DELETE FROM builds WHERE code = ?", change.buildCode);
+      } else {
+        const build = this.buildRow(SUBSCRIPTION_CODE, change.buildCode);
+        if (build)
+          this.ctx.storage.sql.exec(
+            "UPDATE builds SET state_json = ? WHERE code = ?",
+            JSON.stringify({ ...this.buildDetail(build), ...change.patch }),
+            change.buildCode,
+          );
+      }
+    }
+  }
+
   consumeFault(operationId: string, resourceIdentifier = ""): OperationFault | null {
     const current = this.scenario();
     const applicable = current.faults.filter(
@@ -1391,7 +1528,6 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
         fault.operationId === operationId &&
         (fault.resourceIdentifier === undefined || fault.resourceIdentifier === resourceIdentifier),
     );
-    if (applicable.length === 0) return null;
     this.ctx.storage.sql.exec(
       `INSERT INTO operation_counters (operation_id, resource_id, call_count) VALUES (?, ?, 1)
        ON CONFLICT(operation_id, resource_id) DO UPDATE SET call_count = call_count + 1`,
@@ -1405,6 +1541,7 @@ export class Ccv2Run extends DurableObject<CloudflareBindings> {
         resourceIdentifier,
       )
       .one().count;
+    this.applyCleanupChanges(operationId, resourceIdentifier, call);
     const fault = applicable.find((candidate) => candidate.onCalls.includes(call));
     if (!fault) return null;
     this.recordEvent("scenario.fault", operationId, resourceIdentifier, fault.status, { call });

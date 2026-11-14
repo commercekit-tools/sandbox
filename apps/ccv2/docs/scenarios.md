@@ -49,3 +49,31 @@ deployments retain their snapshot. Updating a scenario resets only fault-call
 counters. Resetting a run removes simulation resources and counters and restores
 the default scenario while retaining its credentials, expiration, and security
 boundary.
+
+## Cleanup fixtures (candidate integration)
+
+`PUT /sandbox/v1/runs/{runId}/cleanup-fixture` requires the run-control bearer.
+It replaces only that run's builds/deployments (150/30 record limits), clears
+operation counters, and accepts optional `changes` and `loseDeleteResponse`
+simulation controls. The normal 64 KiB request limit still applies. A fixture's
+`response` is the vendor-shaped record; intentionally malformed records are
+supported so clients can test fail-closed validation.
+
+`modifiedAt` is internal fixture metadata. When supplied, deletion rejects builds
+modified within four hours. It is never returned by SAP-shaped build reads and
+is not evidence that SAP exposes a build modification timestamp or enforces this
+precondition at its API.
+
+Changes specify `operationId` (`getBuilds`, `getBuild`, `deleteBuild`), `onCall`,
+`buildCode`, and either `patch` or `remove`. Call counters are per operation and
+resource, making races deterministic. `loseDeleteResponse` models acceptance
+followed by a 500 response; the build remains stored with status `DELETED`,
+representing deletion initiation rather than physical disappearance.
+
+The existing state endpoint's `faultCounters` now counts all target operations
+(and token issuance), even when no fault is configured. Keys such as
+`deleteBuild:build-1` count attempted target mutations independently of control
+fixture operations; do not count run teardown or fixture PUT as SAP mutations.
+
+Always delete the isolated run in a `finally` block. Hosted runs require explicit
+configuration; these controls do not grant permission for production SAP writes.
