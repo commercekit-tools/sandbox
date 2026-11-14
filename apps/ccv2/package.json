@@ -22,7 +22,7 @@
     "build:check": "wrangler deploy --dry-run --outdir .wrangler/build"
   },
   "dependencies": {
-    "hono": "4.13.13",
+    "hono": "4.13.16",
     "jose": "^6.2.12",
     "yaml": "^2.9.1",
     "zod": "^4.6.7"
