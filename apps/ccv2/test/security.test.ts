@@ -1,5 +1,5 @@
 import { env, exports as worker } from "cloudflare:workers";
-import { importPKCS8, SignJWT } from "jose";
+import { base64url, importPKCS8, SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 
 import { createRun, issueToken, sapHeaders } from "./helpers";
@@ -34,7 +34,10 @@ describe("authentication and abuse boundaries", () => {
     const payload = parts[1];
     const signature = parts[2] ?? "";
     if (!header || !payload || !signature) throw new Error("Issued token is malformed");
-    const corrupted = `${header}.${payload}.${signature.slice(0, -2)}aa`;
+    // Change leading bits so tampering cannot affect only unused base64url padding bits.
+    const corruptedSignature = `${signature.startsWith("A") ? "B" : "A"}${signature.slice(1)}`;
+    expect(base64url.decode(corruptedSignature)).not.toEqual(base64url.decode(signature));
+    const corrupted = `${header}.${payload}.${corruptedSignature}`;
     expect((await worker.default.fetch(builds, { headers: sapHeaders(corrupted) })).status).toBe(
       401,
     );
