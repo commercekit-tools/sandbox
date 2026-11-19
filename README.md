@@ -27,9 +27,11 @@ The CCv2 Worker uses:
 - Vitest with Cloudflare's Workers runtime integration
 - ESLint and Prettier for code quality
 
-API documentation, the service catalog, and the interactive playground will live on
-`commercekit.tools`. This repository does not contain a frontend. The production API hostname is
-`ccv2.sandbox.commercekit.tools`.
+The [service catalog](https://commercekit.tools/sandbox),
+[CCv2 documentation](https://commercekit.tools/docs/sandbox/ccv2),
+[API reference](https://commercekit.tools/sandbox/ccv2/api), and
+[interactive playground](https://commercekit.tools/sandbox/ccv2/playground) are hosted on
+`commercekit.tools`. This repository owns the API Worker at `ccv2.sandbox.commercekit.tools`.
 
 ## Requirements
 
@@ -77,6 +79,7 @@ CCV2_CONFIRM_PRODUCTION=1 pnpm smoke:production
 
 ```bash
 pnpm types:ccv2
+pnpm security:audit
 pnpm lint
 pnpm format:check
 pnpm typecheck
@@ -87,6 +90,10 @@ pnpm run ci
 
 `pnpm build:check` builds the Worker through a Wrangler deployment dry-run. It does not deploy or
 require Cloudflare credentials.
+
+`pnpm security:audit` includes development dependencies and fails on moderate or higher
+advisories. It runs in both `pnpm run ci` and GitHub CI. Development tooling is part of this
+check even when it is absent from the deployed Worker.
 
 GitHub Actions runs validation only. Production deployment uses Cloudflare Workers Builds, with
 `apps/ccv2` as the root directory. Required runtime secrets and the pre-merge checklist are in
