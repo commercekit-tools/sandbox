@@ -19,12 +19,13 @@
     "typecheck": "pnpm --filter @commercekit/sandbox-ccv2 typecheck",
     "test": "pnpm --filter @commercekit/sandbox-ccv2 test",
     "build:check": "pnpm --filter @commercekit/sandbox-ccv2 build:check",
-    "ci": "pnpm --filter @commercekit/sandbox-ccv2 types:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm --filter @commercekit/sandbox-ccv2 openapi:check && pnpm test && pnpm build:check"
+    "security:audit": "pnpm audit --audit-level=moderate",
+    "ci": "pnpm security:audit && pnpm --filter @commercekit/sandbox-ccv2 types:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm --filter @commercekit/sandbox-ccv2 openapi:check && pnpm test && pnpm build:check"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "eslint": "10.14.0",
+    "eslint": "10.15.0",
     "prettier": "3.10.0",
-    "typescript-eslint": "8.72.2"
+    "typescript-eslint": "8.73.0"
   }
 }

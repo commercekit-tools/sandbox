@@ -65,7 +65,7 @@ state-aware handler and test coverage rather than a catch-all response.
 | Certificates                  |                     4 |           4 |                                                                4 | Metadata is synthetic; private keys are never returned |
 | Role assignments              |                     5 |           5 |                                                                5 | Users and roles are synthetic                          |
 | **Management API total**      |                **52** |      **52** | **52 route/contract parity; representative behavior per family** | See limitations below                                  |
-| CommerceKit control and OAuth |                    10 |          10 |                                                               10 | Independently versioned sandbox surface                |
+| CommerceKit control and OAuth |                    11 |          11 |                                                               11 | Includes isolated cleanup-fixture seeding              |
 | SCIM extension                |                     — |           0 |                                                                0 | No verified contract selected                          |
 
 ## Scope decisions
