@@ -29,10 +29,10 @@
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^13.1.0",
-    "@cloudflare/vitest-plugin": "1.8.0",
+    "@cloudflare/vitest-plugin": "1.8.2",
     "@types/node": "26.6.6",
     "typescript": "7.0.2",
     "vitest": "5.1.0",
-    "wrangler": "4.160.1"
+    "wrangler": "4.162.0"
   }
 }
